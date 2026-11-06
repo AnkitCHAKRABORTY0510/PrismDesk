@@ -1,0 +1,255 @@
+.user-management-page {
+  min-height: 100vh;
+  padding: 32px;
+  background: #f4f6fa;
+  color: #18243a;
+  text-align: left;
+}
+
+.user-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.user-management-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.user-management-header p {
+  margin: 8px 0 0;
+  color: #778196;
+  font-size: 14px;
+}
+
+.refresh-users-button {
+  padding: 10px 18px;
+  border: 1px solid #d8deea;
+  border-radius: 7px;
+  background: white;
+  color: #263957;
+  cursor: pointer;
+}
+
+.refresh-users-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.user-management-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.user-stat-card {
+  padding: 22px;
+  background: white;
+  border: 1px solid #e6eaf1;
+  border-radius: 10px;
+}
+
+.user-stat-card span {
+  display: block;
+  color: #778196;
+  font-size: 13px;
+}
+
+.user-stat-card strong {
+  display: block;
+  margin-top: 12px;
+  font-size: 27px;
+}
+
+.user-management-panel {
+  padding: 24px;
+  background: white;
+  border: 1px solid #e6eaf1;
+  border-radius: 10px;
+}
+
+.user-filter-section {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.user-filter-section input,
+.user-filter-section select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid #dce2ec;
+  border-radius: 7px;
+  background: white;
+  color: #263957;
+  font-size: 13px;
+  outline: none;
+}
+
+.user-filter-section input:focus,
+.user-filter-section select:focus {
+  border-color: #4269b2;
+}
+
+.user-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.user-management-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.user-management-table th {
+  padding: 14px 12px;
+  background: #f7f8fb;
+  color: #68758c;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.user-management-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid #edf0f5;
+  font-size: 13px;
+}
+
+.user-name-cell strong,
+.user-name-cell span {
+  display: block;
+}
+
+.user-name-cell strong {
+  color: #253650;
+}
+
+.user-name-cell span {
+  margin-top: 5px;
+  color: #8993a5;
+  font-size: 12px;
+}
+
+.user-status-badge {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.user-status-badge.approved {
+  background: #e5f6ec;
+  color: #21834c;
+}
+
+.user-status-badge.pending {
+  background: #fff4dc;
+  color: #a56b08;
+}
+
+.user-status-badge.rejected {
+  background: #fde9e9;
+  color: #bd3939;
+}
+
+.user-status-badge.suspended {
+  background: #ececf0;
+  color: #626273;
+}
+
+.user-action-button {
+  padding: 7px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-action-button.suspend {
+  background: #fff0e9;
+  color: #c14f27;
+}
+
+.user-action-button.reactivate {
+  background: #e5f6ec;
+  color: #21834c;
+}
+
+.user-action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.no-user-action {
+  color: #a0a8b5;
+}
+
+.user-table-message {
+  padding: 35px !important;
+  color: #8490a3;
+  text-align: center;
+}
+
+.user-table-footer {
+  margin-top: 18px;
+  color: #8490a3;
+  font-size: 12px;
+}
+
+.user-success-message,
+.user-error-message {
+  margin-bottom: 18px;
+  padding: 12px 15px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.user-success-message {
+  background: #e5f6ec;
+  color: #21834c;
+}
+
+.user-error-message {
+  background: #fde9e9;
+  color: #bd3939;
+}
+
+@media (max-width: 900px) {
+  .user-management-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .user-filter-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 550px) {
+  .user-management-page {
+    padding: 18px;
+  }
+
+  .user-management-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .user-management-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .user-management-panel {
+    padding: 14px;
+  }
+}
