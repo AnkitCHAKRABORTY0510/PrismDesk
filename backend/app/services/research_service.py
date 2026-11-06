@@ -22,7 +22,9 @@ from app.schemas.research import (
     PaperResponse,
     PaperUpdate,
 )
+from app.core.config import settings
 from app.services.audit_service import record_audit
+from app.services.notification_service import enqueue_notification
 from app.services.project_access import get_project_access, require, visible_project_ids
 
 
@@ -114,9 +116,16 @@ def paper_responses(db: Session, user: User, papers: list[ResearchPaper]) -> lis
             projects=links.get(paper.id, []),
             my_status=statuses.get(paper.id),
             can_edit=can_edit_paper(user, paper),
+            discord_thread_url=_thread_url(paper),
         )
         for paper in papers
     ]
+
+
+def _thread_url(paper: ResearchPaper) -> str | None:
+    if not (paper.discord_thread_id and settings.DISCORD_GUILD_ID):
+        return None
+    return f"https://discord.com/channels/{settings.DISCORD_GUILD_ID}/{paper.discord_thread_id}"
 
 
 def list_papers(
@@ -221,7 +230,62 @@ def _link(db: Session, user: User, paper_id: UUID, project_id: UUID) -> bool:
         record_audit(
             db, user.id, "paper.linked", "research_paper", paper_id, {"project_id": project_id}
         )
+        _notify_project_members(db, user, paper_id, access.project)
     return created
+
+
+def _paper_summary(paper: ResearchPaper) -> str:
+    authors = ", ".join(paper.authors[:4]) + (" et al." if len(paper.authors) > 4 else "")
+    parts = [part for part in (authors, paper.venue, str(paper.publication_year or "")) if part]
+    lines = [" · ".join(parts)] if parts else []
+    if paper.doi:
+        lines.append(f"https://doi.org/{paper.doi}")
+    if paper.url and paper.url != f"https://doi.org/{paper.doi}":
+        lines.append(paper.url)
+    return "\n".join(lines)
+
+
+def _notify_project_members(db: Session, user: User, paper_id: UUID, project: Project) -> None:
+    """DM project members (research category) that a paper joined their project."""
+
+    paper = db.get(ResearchPaper, paper_id)
+    member_ids = db.scalars(
+        select(ProjectMember.user_id).where(
+            ProjectMember.project_id == project.id,
+            ProjectMember.membership_status == "active",
+            ProjectMember.user_id != user.id,
+        )
+    ).all()
+    for member_id in member_ids:
+        enqueue_notification(
+            db,
+            recipient_id=member_id,
+            category="research",
+            event_type="paper.linked",
+            title=f"New paper in {project.title}",
+            body=f"{user.full_name} added “{paper.title}”.\n{_paper_summary(paper)}",
+            entity_type="research_paper",
+            entity_id=paper_id,
+            dedupe_key=f"paper.linked:{project.id}:{paper_id}:{member_id}",
+        )
+
+
+def _announce_new_paper(db: Session, user: User, paper: ResearchPaper) -> None:
+    """Post a new paper to the lab research channel; the worker opens a thread for discussion."""
+
+    if not settings.DISCORD_RESEARCH_CHANNEL_ID:
+        return
+    enqueue_notification(
+        db,
+        channel_id=settings.DISCORD_RESEARCH_CHANNEL_ID,
+        category="research",
+        event_type="paper.added",
+        title=f"📄 New paper: {paper.title}",
+        body=f"Added by {user.full_name}.\n{_paper_summary(paper)}\nDiscuss it in the thread below.",
+        entity_type="research_paper",
+        entity_id=paper.id,
+        dedupe_key=f"paper.added:{paper.id}",
+    )
 
 
 def create_paper(db: Session, user: User, data: PaperCreate) -> tuple[ResearchPaper, bool]:
@@ -266,6 +330,7 @@ def create_paper(db: Session, user: User, data: PaperCreate) -> tuple[ResearchPa
         raise ConflictError("A paper with this DOI already exists.")
 
     record_audit(db, user.id, "paper.created", "research_paper", paper.id, {"title": paper.title})
+    _announce_new_paper(db, user, paper)
 
     if data.project_id:
         _link(db, user, paper.id, data.project_id)

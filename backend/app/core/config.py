@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     DISCORD_REDIRECT_URI: str = ""
     DISCORD_BOT_TOKEN: str = ""
     DISCORD_ANNOUNCEMENT_CHANNEL_ID: str = ""
+    # Channel where new papers are posted; each post gets a discussion thread.
+    DISCORD_RESEARCH_CHANNEL_ID: str = ""
+    # Server (guild) ID, used to build "Discuss on Discord" links.
+    DISCORD_GUILD_ID: str = ""
+
+    # Used to fetch paper metadata for a DOI (doi.org content negotiation).
+    DOI_LOOKUP_URL: str = "https://doi.org"
     DISCORD_API_BASE_URL: str = "https://discord.com/api/v10"
 
     # Notification worker.

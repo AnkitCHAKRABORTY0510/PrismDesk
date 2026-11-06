@@ -155,7 +155,7 @@ def test_reminders_are_deduplicated(db, login, make_user, make_project):
 def test_preferences_api(login, student):
     api = login(student)
     defaults = api.get(f"{N}/preferences").json()
-    assert all(item["enabled"] for item in defaults) and len(defaults) == 5
+    assert all(item["enabled"] for item in defaults) and len(defaults) == 6
     updated = api.put(f"{N}/preferences", json={"preferences": [{"category": "handbook", "enabled": False}]}).json()
     assert {i["category"]: i["enabled"] for i in updated}["handbook"] is False
     assert api.put(f"{N}/preferences", json={"preferences": [{"category": "chat", "enabled": False}]}).status_code == 422

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-Category = Literal["tasks", "projects", "conferences", "handbook", "administrative"]
+Category = Literal["tasks", "projects", "research", "conferences", "handbook", "administrative"]
 NotificationStatus = Literal["pending", "processing", "sent", "failed", "retry_scheduled"]
 
 

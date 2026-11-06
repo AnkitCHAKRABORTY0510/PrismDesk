@@ -65,15 +65,20 @@ venv/bin/python -m scripts.create_admin
 | `PROJECT_DELETE_RETENTION_DAYS` | 90 | recovery window |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI` | empty | OAuth2 account linking |
 | `DISCORD_BOT_TOKEN`, `DISCORD_ANNOUNCEMENT_CHANNEL_ID` | empty | delivery |
+| `DISCORD_RESEARCH_CHANNEL_ID`, `DISCORD_GUILD_ID` | empty | new papers are posted to this channel with a discussion thread; the guild ID builds "Discuss on Discord" links |
+| `DOI_LOOKUP_URL` | https://doi.org | metadata lookup for DOIs (outbound HTTPS from the server) |
 | `NOTIFICATION_MAX_ATTEMPTS`, `NOTIFICATION_RETRY_BASE_SECONDS`, `NOTIFICATION_RETRY_MAX_SECONDS`, `NOTIFICATION_POLL_SECONDS` | 5, 60, 3600, 15 | backoff = base × 2^(attempt−1), capped |
 | `TASK_REMINDER_HOURS`, `CONFERENCE_REMINDER_DAYS` | 24, 7 | reminder windows |
 
 ## 4. Discord setup (optional)
 1. Create an application at the Discord Developer Portal. Under OAuth2 add the redirect
    `https://<host>/api/v1/notifications/discord/callback`; copy the client ID and secret to `.env`.
-2. Add a Bot, copy its token to `DISCORD_BOT_TOKEN`, and invite it to the lab server (it needs to share
-   a server with users to DM them, and "Send Messages" in the announcement channel).
-3. Users link their account under **Notifications** in Prism Desk.
+2. Add a Bot, copy its token to `DISCORD_BOT_TOKEN`, and invite it to the lab server with the `bot`
+   scope and the permissions Send Messages, Create Public Threads and Send Messages in Threads
+   (it must share a server with users to DM them).
+3. With Discord Developer Mode on, copy the research channel ID (`DISCORD_RESEARCH_CHANNEL_ID`),
+   the announcement channel ID and the server ID (`DISCORD_GUILD_ID`).
+4. Users link their account under **Notifications** in Prism Desk.
 Without these values the app works normally; queued notifications are retried and then marked failed.
 
 ## 5. Frontend

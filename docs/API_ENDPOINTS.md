@@ -65,6 +65,7 @@ Authorization rules per endpoint are described in `docs/API.md`.
 |---|---|---|---|---|---|
 | `GET` | `/api/v1/research/papers` | List Papers | `search`, `author`, `keyword`, `year`, `year_from`, `year_to`, `project_id`, `reading_status`, `page`, `page_size` | — | 200 Page_PaperResponse_ |
 | `POST` | `/api/v1/research/papers` | Create Paper | — | PaperCreate | 201 PaperResponse |
+| `GET` | `/api/v1/research/lookup` | Doi Lookup | `doi` | — | 200 DoiLookupResponse |
 | `GET` | `/api/v1/research/papers/{paper_id}` | Get Paper | — | — | 200 PaperResponse |
 | `PATCH` | `/api/v1/research/papers/{paper_id}` | Update Paper | — | PaperUpdate | 200 PaperResponse |
 | `POST` | `/api/v1/research/papers/{paper_id}/projects` | Link Paper | — | ProjectLinkRequest | 200 PaperResponse |

@@ -55,6 +55,9 @@ class ResearchPaper(Base):
         ARRAY(String(100)), nullable=False, default=list, server_default="{}"
     )
     added_by: Mapped[uuid.UUID | None] = user_fk(nullable=True)
+    # Discord thread where the lab discusses this paper (discussion lives
+    # in Discord; Prism Desk only stores the thread ID).
+    discord_thread_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = created_at()
     updated_at: Mapped[datetime] = updated_at()
 

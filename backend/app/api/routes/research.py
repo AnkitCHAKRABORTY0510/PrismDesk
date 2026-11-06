@@ -1,13 +1,14 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, page_params
+from app.api.dependencies import get_current_user, page_params, require_capability
 from app.database.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, Page, PageParams
 from app.schemas.research import (
+    DoiLookupResponse,
     NoteCreate,
     NoteResponse,
     NoteUpdate,
@@ -19,7 +20,9 @@ from app.schemas.research import (
     ReadingProgressUpdate,
     ReadingStatus,
 )
+from app.schemas.research import normalize_doi
 from app.services import research_service
+from app.services.doi_lookup import lookup_doi
 
 router = APIRouter(prefix="/research", tags=["Research Library"])
 
@@ -62,6 +65,27 @@ def list_papers(
         page=params.page,
         page_size=params.page_size,
     )
+
+
+@router.get("/lookup", response_model=DoiLookupResponse)
+def doi_lookup(
+    doi: str = Query(min_length=6, max_length=255),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_capability("research.create")),
+):
+    """Suggest metadata for a DOI (for example one found in a PDF in the browser)."""
+
+    try:
+        normalized = normalize_doi(doi)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    if not normalized:
+        raise HTTPException(status_code=422, detail="Enter a DOI.")
+
+    duplicate = research_service._find_duplicate(db, normalized, None)
+    result = DoiLookupResponse(**lookup_doi(normalized))
+    result.existing_paper_id = duplicate.id if duplicate else None
+    return result
 
 
 @router.post("/papers", response_model=PaperResponse, status_code=status.HTTP_201_CREATED)

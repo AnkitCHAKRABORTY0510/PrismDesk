@@ -66,6 +66,11 @@ local git commit (`git log --oneline`). `.env` files are ignored and were not re
 - Project analytics for managers (completion rate, overdue, reading progress, handbook entries per week, 30-day activity, deadlines). System settings summary (non-secret values only).
 - **Frontend:** single `/dashboard` with tabs for users holding several roles; legacy `/admin|professor|student|guest/dashboard` URLs redirect.
 
+## Follow-up — Discord paper threads and PDF metadata import
+- New papers are posted by the bot to `DISCORD_RESEARCH_CHANNEL_ID`; the worker opens a public thread on the post and stores its ID, and the paper page links to it ("Discuss on Discord"). Discussion happens only in Discord. Project members get a `research`-category DM when a paper joins their project.
+- "Import from PDF" reads the PDF in the browser with pdf.js (title, authors, keywords, DOI or arXiv ID), then `GET /research/lookup?doi=` fills metadata from doi.org (Crossref and DataCite). The PDF is never sent to the server or stored; the record keeps an external download link (arXiv PDF or DOI by default, editable).
+- Migration `a1b2c3d4e508`. Tests: 6 backend, 3 frontend.
+
 ## Shared frontend
 App shell (sidebar driven by backend capabilities, top bar, breadcrumbs, responsive menu), reusable
 components (Button, Card, StatCard, Field/Input/Textarea/Select, SearchInput, FilterSelect, Badge/StatusBadge,

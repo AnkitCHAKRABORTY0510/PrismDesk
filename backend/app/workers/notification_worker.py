@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.models.conference import Conference, ProjectConference
 from app.models.notification import Notification, NotificationDeliveryAttempt
+from app.models.research import ResearchPaper
 from app.models.project import Project, ProjectMember
 from app.models.task import Task, TaskAssignment
 from app.services.discord_client import DeliveryResult, DiscordSender
@@ -43,9 +44,29 @@ def _format(notification: Notification) -> str:
     return f"**{notification.title}**\n{notification.body}".strip()
 
 
+def _open_paper_thread(db: Session, notification: Notification, sender: DiscordSender, message_id: str) -> None:
+    """Start the discussion thread for a newly posted paper.
+
+    A thread failure is logged but does not fail the delivered post.
+    """
+
+    paper = db.get(ResearchPaper, notification.entity_id) if notification.entity_id else None
+    if paper is None or paper.discord_thread_id:
+        return
+
+    thread = sender.start_thread(notification.channel_id, message_id, paper.title)
+    if thread.success and thread.channel_id:
+        paper.discord_thread_id = thread.channel_id
+    else:
+        logger.warning("Could not open a discussion thread for paper %s: %s", paper.id, thread.error)
+
+
 def _deliver(db: Session, notification: Notification, sender: DiscordSender) -> DeliveryResult:
     if notification.channel_id:
-        return sender.send_message(notification.channel_id, _format(notification))
+        result = sender.send_message(notification.channel_id, _format(notification))
+        if result.success and result.message_id and notification.event_type == "paper.added":
+            _open_paper_thread(db, notification, sender, result.message_id)
+        return result
 
     # Re-check at send time: the user may have unlinked or opted out.
     account = linked_account(db, notification.recipient_id)

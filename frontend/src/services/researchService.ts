@@ -20,6 +20,19 @@ export interface Paper {
   my_status: ReadingStatus | null;
   can_edit: boolean;
   linked_existing: boolean;
+  discord_thread_url: string | null;
+}
+
+export interface DoiLookup {
+  title: string | null;
+  authors: string[];
+  abstract: string;
+  publication_year: number | null;
+  venue: string | null;
+  doi: string;
+  url: string | null;
+  keywords: string[];
+  existing_paper_id: string | null;
 }
 
 export interface PaperInput {
@@ -57,6 +70,8 @@ const base = "/api/v1/research";
 
 export const listPapers = async (params: QueryParams = {}) =>
   (await api.get<Page<Paper>>(`${base}/papers`, { params: cleanParams(params) })).data;
+export const lookupDoi = async (doi: string) =>
+  (await api.get<DoiLookup>(`${base}/lookup`, { params: { doi } })).data;
 export const getPaper = async (id: string) => (await api.get<Paper>(`${base}/papers/${id}`)).data;
 export const createPaper = async (input: PaperInput) => (await api.post<Paper>(`${base}/papers`, input)).data;
 export const updatePaper = async (id: string, input: Partial<PaperInput>) =>

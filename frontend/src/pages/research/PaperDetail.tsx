@@ -75,7 +75,21 @@ export default function PaperDetail() {
       <PageHeader
         title={p.title}
         description={p.authors.join(", ")}
-        actions={p.can_edit && <Button variant="secondary" onClick={() => setEditing(true)}>Edit metadata</Button>}
+        actions={
+          <>
+            {p.discord_thread_url && (
+              <a
+                href={p.discord_thread_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-medium text-white hover:bg-[#4752c4]"
+              >
+                Discuss on Discord
+              </a>
+            )}
+            {p.can_edit && <Button variant="secondary" onClick={() => setEditing(true)}>Edit metadata</Button>}
+          </>
+        }
       />
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="Details" className="lg:col-span-2">

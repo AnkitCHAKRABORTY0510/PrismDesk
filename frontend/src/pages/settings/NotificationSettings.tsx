@@ -29,6 +29,7 @@ import {
 const DESCRIPTIONS: Record<string, string> = {
   tasks: "Assignments, submissions, reviews and due-date reminders",
   projects: "New projects, membership changes and archival requests",
+  research: "Papers added to your projects",
   conferences: "Upcoming conference submission deadlines",
   handbook: "Comments and replies on handbook entries",
   administrative: "Account approval and lab announcements",

@@ -155,6 +155,7 @@ Personal tasks get one assignment to their creator, so both task types share one
 | `a1b2c3d4e505` | Phase 5: handbook entries, versions, daily summaries, summary versions, comments |
 | `a1b2c3d4e506` | Phase 6: `conferences`, `project_conferences` |
 | `a1b2c3d4e507` | Phase 7: Discord accounts, OAuth states, preferences, notifications, delivery attempts |
+| `a1b2c3d4e508` | `research_papers.discord_thread_id`; `research` notification category |
 
 All new migrations are additive (new tables, nullable columns, indexes). None alters or drops
 existing data. They were applied to the `prism_desk` database on 2026-11-06 after a `pg_dump`

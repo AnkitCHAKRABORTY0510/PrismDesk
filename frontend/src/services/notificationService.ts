@@ -1,7 +1,7 @@
 import api from "./api";
 import { cleanParams, type MessageResponse, type Page, type QueryParams } from "./types";
 
-export type NotificationCategory = "tasks" | "projects" | "conferences" | "handbook" | "administrative";
+export type NotificationCategory = "tasks" | "projects" | "research" | "conferences" | "handbook" | "administrative";
 export type NotificationStatus = "pending" | "processing" | "sent" | "failed" | "retry_scheduled";
 
 export interface DiscordStatus {

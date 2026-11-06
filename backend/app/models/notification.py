@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
 from app.models.columns import created_at, optional_timestamp, updated_at, uuid_pk
 
-NOTIFICATION_CATEGORIES = ("tasks", "projects", "conferences", "handbook", "administrative")
+NOTIFICATION_CATEGORIES = ("tasks", "projects", "research", "conferences", "handbook", "administrative")
 NOTIFICATION_STATUSES = ("pending", "processing", "sent", "failed", "retry_scheduled")
 
 
@@ -76,7 +76,7 @@ class NotificationPreference(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "category IN ('tasks', 'projects', 'conferences', 'handbook', 'administrative')",
+            "category IN ('tasks', 'projects', 'research', 'conferences', 'handbook', 'administrative')",
             name="ck_notification_preferences_category",
         ),
     )

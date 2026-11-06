@@ -21,6 +21,7 @@ class DeliveryResult:
     error: str | None = None
     retryable: bool = True
     channel_id: str | None = None
+    message_id: str | None = None
 
 
 class DiscordSender:
@@ -64,7 +65,24 @@ class DiscordSender:
             # Never ping @everyone/roles from generated content.
             json={"content": content[:2000], "allowed_mentions": {"parse": []}},
         )
-        return self._result(response)
+        result = self._result(response)
+        if result.success:
+            result.message_id = response.json().get("id")
+        return result
+
+    def start_thread(self, channel_id: str, message_id: str, name: str) -> DeliveryResult:
+        """Open a public discussion thread on a channel message."""
+
+        response = self._client.post(
+            f"{settings.DISCORD_API_BASE_URL}/channels/{channel_id}/messages/{message_id}/threads",
+            headers=self._headers(),
+            # Thread names are limited to 100 characters; archive after a week idle.
+            json={"name": name[:100], "auto_archive_duration": 10080},
+        )
+        result = self._result(response)
+        if result.success:
+            result.channel_id = response.json().get("id")
+        return result
 
 
 def oauth_authorize_url(state: str) -> str:

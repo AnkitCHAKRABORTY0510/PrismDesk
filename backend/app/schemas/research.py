@@ -119,6 +119,21 @@ class PaperResponse(BaseModel):
     my_status: ReadingStatus | None = None
     can_edit: bool = False
     linked_existing: bool = False
+    discord_thread_url: str | None = None
+
+
+class DoiLookupResponse(BaseModel):
+    """Metadata suggested for a DOI. Nothing is stored until the user saves."""
+
+    title: str | None = None
+    authors: list[str] = []
+    abstract: str = ""
+    publication_year: int | None = None
+    venue: str | None = None
+    doi: str
+    url: str | None = None
+    keywords: list[str] = []
+    existing_paper_id: UUID | None = None
 
 
 class ProjectLinkRequest(BaseModel):
