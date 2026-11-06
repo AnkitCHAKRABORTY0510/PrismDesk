@@ -1,17 +1,20 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
 
+import { onUnauthorized, setCsrfToken } from "../services/api";
 import {
+  getCurrentUser,
   loginUser,
   logoutUser,
-  getCurrentUser,
-  type User,
   type LoginCredentials,
+  type User,
 } from "../services/authService";
 
 interface AuthContextType {
@@ -23,89 +26,74 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(
-  undefined
-);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Keep the in-memory CSRF token in sync with the signed-in user.
+  const setUser = useCallback((next: User | null) => {
+    setCsrfToken(next?.csrf_token ?? null);
+    setUserState(next);
+  }, []);
 
   // Verify the existing session when the application starts.
   useEffect(() => {
-    const checkAuthentication = async () => {
-      try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-      } catch {
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    getCurrentUser()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+  }, [setUser]);
 
-    checkAuthentication();
-  }, []);
+  // Any 401 from the API (expired, revoked or suspended session) signs
+  // the user out locally so protected routes redirect to login.
+  useEffect(() => {
+    onUnauthorized(() => setUser(null));
+    return () => onUnauthorized(null);
+  }, [setUser]);
 
-  // Login.
-  const login = async (
-    credentials: LoginCredentials
-  ): Promise<User> => {
-    const authenticatedUser = await loginUser(credentials);
+  const login = useCallback(
+    async (credentials: LoginCredentials): Promise<User> => {
+      const authenticatedUser = await loginUser(credentials);
+      setUser(authenticatedUser);
+      return authenticatedUser;
+    },
+    [setUser]
+  );
 
-    setUser(authenticatedUser);
-
-    return authenticatedUser;
-  };
-
-  // Logout.
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
     try {
       await logoutUser();
     } finally {
       setUser(null);
     }
-  };
+  }, [setUser]);
 
-  // Refresh the current user.
-  const refreshUser = async (): Promise<void> => {
+  const refreshUser = useCallback(async (): Promise<void> => {
     try {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      setUser(await getCurrentUser());
     } catch (error) {
       setUser(null);
       throw error;
     }
-  };
+  }, [setUser]);
 
-  const value: AuthContextType = {
-    user,
-    loading,
-    isAuthenticated: user !== null,
-    login,
-    logout,
-    refreshUser,
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextType>(
+    () => ({ user, loading, isAuthenticated: user !== null, login, logout, refreshUser }),
+    [user, loading, login, logout, refreshUser]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 // Custom hook for accessing authentication.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error(
-      "useAuth must be used inside an AuthProvider."
-    );
+    throw new Error("useAuth must be used inside an AuthProvider.");
   }
 
   return context;

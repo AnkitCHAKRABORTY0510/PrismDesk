@@ -1,47 +1,36 @@
-import {
-  Navigate,
-  Outlet,
-  useLocation,
-} from "react-router";
+import { Navigate, Outlet, useLocation } from "react-router";
 
 import { useAuth } from "../../context/AuthContext";
+import { can } from "../../lib/permissions";
+import { Loading } from "../ui";
 
 interface ProtectedRouteProps {
-  allowedRoles: string[];
+  allowedRoles?: string[];
+  capability?: string;
 }
 
-export default function ProtectedRoute({
-  allowedRoles,
-}: ProtectedRouteProps) {
+// Client-side route guard. It improves navigation only; the API
+// enforces every permission independently.
+export default function ProtectedRoute({ allowedRoles, capability }: ProtectedRouteProps) {
   const { user, loading, isAuthenticated } = useAuth();
   const location = useLocation();
 
   // Wait until the existing session is verified.
   if (loading) {
-    return <p>Checking authentication...</p>;
+    return <Loading label="Checking authentication…" />;
   }
 
-  // Redirect unauthenticated users to login.
+  // Redirect unauthenticated users to login, remembering the target.
   if (!isAuthenticated || !user) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location }}
-      />
-    );
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // Check whether the user has an allowed role.
-  const hasPermission = user.roles.some((role) =>
-    allowedRoles.includes(role)
-  );
+  const roleAllowed = !allowedRoles || user.roles.some((role) => allowedRoles.includes(role));
+  const capabilityAllowed = !capability || can(user, capability);
 
-  // Redirect users who do not have the required role.
-  if (!hasPermission) {
+  if (!roleAllowed || !capabilityAllowed) {
     return <Navigate to="/unauthorized" replace />;
   }
 
   return <Outlet />;
 }
-

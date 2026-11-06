@@ -1,32 +1,31 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import axios from "axios";
 
 import { useAuth } from "../../context/AuthContext";
 import "./Login.css";
 
+// Users without any role cannot use the application.
 function getDashboardPath(roles: string[]): string | null {
-  if (roles.includes("Administrator")) {
-    return "/admin/dashboard";
-  }
+  return roles.length > 0 ? "/dashboard" : null;
+}
 
-  if (roles.includes("Professor")) {
-    return "/professor/dashboard";
-  }
+interface LocationState {
+  from?: { pathname: string; search?: string };
+}
 
-  if (roles.includes("Student")) {
-    return "/student/dashboard";
+// Return to the page that required login, but never to the auth pages.
+function redirectTarget(state: unknown, fallback: string): string {
+  const from = (state as LocationState | null)?.from;
+  if (!from || ["/login", "/register", "/"].includes(from.pathname)) {
+    return fallback;
   }
-
-  if (roles.includes("Guest")) {
-    return "/guest/dashboard";
-  }
-
-  return null;
+  return from.pathname + (from.search ?? "");
 }
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, user, loading, isAuthenticated } = useAuth();
 
   const [identifier, setIdentifier] = useState("");
@@ -34,15 +33,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  // Redirect users who already have an active session.
-  if (!loading && isAuthenticated && user) {
-    const dashboard = getDashboardPath(user.roles);
-
-    if (dashboard) {
-      navigate(dashboard, { replace: true });
-    }
-  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -63,7 +53,7 @@ export default function Login() {
         return;
       }
 
-      navigate(dashboard, { replace: true });
+      navigate(redirectTarget(location.state, dashboard), { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const detail = err.response?.data?.detail;
@@ -81,8 +71,14 @@ export default function Login() {
     }
   };
 
-  if (loading || (isAuthenticated && user)) {
+  if (loading) {
     return <div className="login-loading">Checking your session...</div>;
+  }
+
+  // Redirect users who already have an active session (declaratively,
+  // not by navigating during render).
+  if (isAuthenticated && user && getDashboardPath(user.roles)) {
+    return <Navigate to={redirectTarget(location.state, "/dashboard")} replace />;
   }
 
   return (

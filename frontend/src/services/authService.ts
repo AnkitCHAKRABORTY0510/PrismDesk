@@ -7,6 +7,8 @@ export interface User {
   email: string;
   full_name: string;
   roles: string[];
+  capabilities: string[];
+  csrf_token: string | null;
   message: string;
 }
 
@@ -61,4 +63,3 @@ export const registerUser = async (
 
   return response.data;
 };
-
