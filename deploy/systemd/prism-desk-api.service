@@ -1,0 +1,25 @@
+# Prism Desk API (FastAPI/Uvicorn), bound to localhost behind Nginx.
+# Install: sudo cp deploy/systemd/prism-desk-api.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now prism-desk-api
+
+[Unit]
+Description=Prism Desk API
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=prismdesk
+Group=prismdesk
+WorkingDirectory=/opt/prism-desk/backend
+EnvironmentFile=/opt/prism-desk/backend/.env
+# A single worker keeps the in-process login rate limiter accurate.
+ExecStart=/opt/prism-desk/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

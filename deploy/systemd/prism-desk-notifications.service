@@ -1,0 +1,24 @@
+# Prism Desk Discord notification worker (outbox delivery and reminders).
+# Install: sudo cp deploy/systemd/prism-desk-notifications.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now prism-desk-notifications
+
+[Unit]
+Description=Prism Desk Discord notification worker
+After=network-online.target postgresql.service prism-desk-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prismdesk
+Group=prismdesk
+WorkingDirectory=/opt/prism-desk/backend
+EnvironmentFile=/opt/prism-desk/backend/.env
+ExecStart=/opt/prism-desk/backend/venv/bin/python -m app.workers.notification_worker
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
