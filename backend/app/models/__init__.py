@@ -3,6 +3,13 @@ from app.models.role import Role
 from app.models.user_role import user_roles
 from app.models.user_session import UserSession
 from app.models.audit_log import AuditLog
+from app.models.notification import (
+    DiscordAccount,
+    DiscordOAuthState,
+    Notification,
+    NotificationDeliveryAttempt,
+    NotificationPreference,
+)
 from app.models.conference import Conference, ProjectConference
 from app.models.handbook import (
     DailySummary,
@@ -26,6 +33,11 @@ __all__ = [
     "user_roles",
     "UserSession",
     "AuditLog",
+    "DiscordAccount",
+    "DiscordOAuthState",
+    "Notification",
+    "NotificationDeliveryAttempt",
+    "NotificationPreference",
     "Conference",
     "ProjectConference",
     "HandbookEntry",
