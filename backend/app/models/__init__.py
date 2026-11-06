@@ -3,6 +3,7 @@ from app.models.role import Role
 from app.models.user_role import user_roles
 from app.models.user_session import UserSession
 from app.models.audit_log import AuditLog
+from app.models.conference import Conference, ProjectConference
 from app.models.handbook import (
     DailySummary,
     DailySummaryVersion,
@@ -25,6 +26,8 @@ __all__ = [
     "user_roles",
     "UserSession",
     "AuditLog",
+    "Conference",
+    "ProjectConference",
     "HandbookEntry",
     "HandbookEntryVersion",
     "DailySummary",

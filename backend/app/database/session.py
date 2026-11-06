@@ -19,6 +19,8 @@ DATABASE_URL = URL.create(
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
+    # Return every timestamptz in UTC; the browser converts to local time.
+    connect_args={"options": "-c timezone=UTC"},
     pool_size=5,
     max_overflow=10,
     echo=settings.SQL_ECHO,

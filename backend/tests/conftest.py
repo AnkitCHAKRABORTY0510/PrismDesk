@@ -29,7 +29,7 @@ TEST_PASSWORD = "Correct-Horse-42!"
 
 test_engine = create_engine(
     DATABASE_URL,
-    connect_args={"options": f"-csearch_path={TEST_SCHEMA}"},
+    connect_args={"options": f"-csearch_path={TEST_SCHEMA} -c timezone=UTC"},
 )
 
 
