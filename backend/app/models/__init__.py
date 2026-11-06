@@ -4,6 +4,12 @@ from app.models.user_role import user_roles
 from app.models.user_session import UserSession
 from app.models.audit_log import AuditLog
 from app.models.project import Project, ProjectMember
+from app.models.research import (
+    PaperReadingProgress,
+    ProjectPaper,
+    ResearchNote,
+    ResearchPaper,
+)
 
 __all__ = [
     "User",
@@ -13,4 +19,8 @@ __all__ = [
     "AuditLog",
     "Project",
     "ProjectMember",
+    "ResearchPaper",
+    "ProjectPaper",
+    "PaperReadingProgress",
+    "ResearchNote",
 ]
