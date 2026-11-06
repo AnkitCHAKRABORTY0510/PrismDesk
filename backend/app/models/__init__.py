@@ -3,6 +3,7 @@ from app.models.role import Role
 from app.models.user_role import user_roles
 from app.models.user_session import UserSession
 from app.models.audit_log import AuditLog
+from app.models.project import Project, ProjectMember
 
 __all__ = [
     "User",
@@ -10,4 +11,6 @@ __all__ = [
     "user_roles",
     "UserSession",
     "AuditLog",
+    "Project",
+    "ProjectMember",
 ]

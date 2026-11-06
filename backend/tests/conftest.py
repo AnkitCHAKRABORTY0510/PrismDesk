@@ -163,3 +163,32 @@ def student(make_user):
 @pytest.fixture()
 def guest(make_user):
     return make_user("Guest")
+
+
+@pytest.fixture()
+def make_project(db):
+    """Create a project directly in the database.
+
+    ``members`` is a list of (user, membership_role) pairs.
+    """
+
+    from app.models.project import Project, ProjectMember
+
+    def _make(owner: User, members=(), title: str = "Spectral imaging study", status: str = "active"):
+        project = Project(
+            title=title,
+            description="",
+            objectives="",
+            owner_id=owner.id,
+            created_by=owner.id,
+            status=status,
+        )
+        db.add(project)
+        db.flush()
+        db.add(ProjectMember(project_id=project.id, user_id=owner.id, membership_role="owner"))
+        for member, role in members:
+            db.add(ProjectMember(project_id=project.id, user_id=member.id, membership_role=role))
+        db.commit()
+        return project
+
+    return _make
