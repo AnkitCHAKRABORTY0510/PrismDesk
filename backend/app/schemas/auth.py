@@ -97,4 +97,6 @@ class LoginResponse(BaseModel):
     email: EmailStr
     full_name: str
     roles: list[str]
+    capabilities: list[str] = []
+    csrf_token: str | None = None
     message: str

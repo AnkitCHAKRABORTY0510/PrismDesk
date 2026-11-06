@@ -1,40 +1,42 @@
 from uuid import UUID
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-    status,
-)
-
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import page_params, require_role
+from app.core.permissions import ADMINISTRATOR
 from app.database.session import get_db
-from app.api.dependencies import require_role
 from app.models.user import User
-
 from app.schemas.admin import (
-    PendingUserResponse,
-    ApproveUserRequest,
+    AccountStatus,
     AdminActionResponse,
+    ApproveUserRequest,
+    PendingUserResponse,
+    RoleChangeRequest,
+    RoleName,
     UserManagementResponse,
+    user_management_response,
 )
-
-from app.services.admin_service import (
-    get_pending_users,
-    get_all_users,
-    approve_user,
-    reject_user,
-    suspend_user,
-    reactivate_user,
-)
-
+from app.schemas.common import Page, PageParams
+from app.services import admin_service
 
 router = APIRouter(
     prefix="/admin",
     tags=["Administrator"],
 )
+
+require_admin = require_role(ADMINISTRATOR)
+
+
+def _action(message: str, user: User, assigned_role: str | None = None):
+    return AdminActionResponse(
+        message=message,
+        user_id=user.id,
+        username=user.username,
+        account_status=user.account_status,
+        assigned_role=assigned_role,
+        roles=sorted(user.role_names),
+    )
 
 
 # List pending registrations.
@@ -44,9 +46,9 @@ router = APIRouter(
 )
 def list_pending_users(
     db: Session = Depends(get_db),
-    admin: User = Depends(require_role("Administrator")),
+    admin: User = Depends(require_admin),
 ):
-    return get_pending_users(db)
+    return admin_service.get_pending_users(db)
 
 
 # Approve a registration and assign a role.
@@ -58,38 +60,10 @@ def approve_registration(
     user_id: UUID,
     request: ApproveUserRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_role("Administrator")),
+    admin: User = Depends(require_admin),
 ):
-    try:
-        user = approve_user(
-            db=db,
-            user_id=user_id,
-            role_name=request.role_name,
-            admin_id=admin.id,
-        )
-
-        return AdminActionResponse(
-            message="User approved successfully.",
-            user_id=user.id,
-            username=user.username,
-            account_status=user.account_status,
-            assigned_role=request.role_name,
-        )
-
-    except ValueError as error:
-        detail = str(error)
-
-        if detail == "User not found.":
-            error_status = status.HTTP_404_NOT_FOUND
-        elif detail.startswith("Only pending"):
-            error_status = status.HTTP_409_CONFLICT
-        else:
-            error_status = status.HTTP_400_BAD_REQUEST
-
-        raise HTTPException(
-            status_code=error_status,
-            detail=detail,
-        )
+    user = admin_service.approve_user(db, user_id, request.role_name, admin)
+    return _action("User approved successfully.", user, request.role_name)
 
 
 # Reject a registration.
@@ -100,93 +74,52 @@ def approve_registration(
 def reject_registration(
     user_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_role("Administrator")),
+    admin: User = Depends(require_admin),
 ):
-    try:
-        user = reject_user(
-            db=db,
-            user_id=user_id,
-        )
+    user = admin_service.reject_user(db, user_id, admin)
+    return _action("User registration rejected.", user)
 
-        return AdminActionResponse(
-            message="User registration rejected.",
-            user_id=user.id,
-            username=user.username,
-            account_status=user.account_status,
-        )
 
-    except ValueError as error:
-        detail = str(error)
-
-        if detail == "User not found.":
-            error_status = status.HTTP_404_NOT_FOUND
-        elif detail.startswith("Only pending"):
-            error_status = status.HTTP_409_CONFLICT
-        else:
-            error_status = status.HTTP_400_BAD_REQUEST
-
-        raise HTTPException(
-            status_code=error_status,
-            detail=detail,
-        )
-    
 # List all registered users with optional filters.
 @router.get(
     "/users",
-    response_model=list[UserManagementResponse],
+    response_model=Page[UserManagementResponse],
 )
 def list_all_users(
     search: str | None = Query(default=None, max_length=255),
-    account_status: str | None = Query(default=None),
-    role_name: str | None = Query(default=None),
+    account_status: AccountStatus | None = Query(default=None),
+    role_name: RoleName | None = Query(default=None),
+    params: PageParams = Depends(page_params),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_role("Administrator")),
+    admin: User = Depends(require_admin),
 ):
-    allowed_statuses = {
-        "pending",
-        "approved",
-        "rejected",
-        "suspended",
-    }
-
-    allowed_roles = {
-        "Administrator",
-        "Professor",
-        "Student",
-        "Guest",
-    }
-
-    if account_status and account_status not in allowed_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid account status filter.",
-        )
-
-    if role_name and role_name not in allowed_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role filter.",
-        )
-
-    users = get_all_users(
+    users, total = admin_service.get_all_users(
         db=db,
+        params=params,
         search=search,
         account_status=account_status,
         role_name=role_name,
     )
 
-    return [
-        {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "account_status": user.account_status,
-            "roles": [role.name for role in user.roles],
-            "created_at": user.created_at,
-        }
-        for user in users
-    ]
+    return Page(
+        items=[user_management_response(user) for user in users],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=UserManagementResponse,
+)
+def get_user_detail(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    return user_management_response(admin_service.get_user(db, user_id))
+
 
 @router.patch(
     "/users/{user_id}/suspend",
@@ -195,39 +128,11 @@ def list_all_users(
 def suspend_registration(
     user_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_role("Administrator")),
+    admin: User = Depends(require_admin),
 ):
-    if user_id == admin.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot suspend your own administrator account.",
-        )
+    user = admin_service.suspend_user(db, user_id, admin)
+    return _action("User account suspended successfully.", user)
 
-    try:
-        user = suspend_user(
-            db=db,
-            user_id=user_id,
-        )
-
-        return AdminActionResponse(
-            message="User account suspended successfully.",
-            user_id=user.id,
-            username=user.username,
-            account_status=user.account_status,
-        )
-
-    except ValueError as error:
-        detail = str(error)
-
-        if detail == "User not found.":
-            error_status = status.HTTP_404_NOT_FOUND
-        else:
-            error_status = status.HTTP_409_CONFLICT
-
-        raise HTTPException(
-            status_code=error_status,
-            detail=detail,
-        )
 
 @router.patch(
     "/users/{user_id}/reactivate",
@@ -236,30 +141,35 @@ def suspend_registration(
 def reactivate_registration(
     user_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_role("Administrator")),
+    admin: User = Depends(require_admin),
 ):
-    try:
-        user = reactivate_user(
-            db=db,
-            user_id=user_id,
-        )
+    user = admin_service.reactivate_user(db, user_id, admin)
+    return _action("User account reactivated successfully.", user)
 
-        return AdminActionResponse(
-            message="User account reactivated successfully.",
-            user_id=user.id,
-            username=user.username,
-            account_status=user.account_status,
-        )
 
-    except ValueError as error:
-        detail = str(error)
+@router.post(
+    "/users/{user_id}/roles",
+    response_model=AdminActionResponse,
+)
+def assign_user_role(
+    user_id: UUID,
+    request: RoleChangeRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = admin_service.assign_role(db, user_id, request.role_name, admin)
+    return _action("Role assigned.", user, request.role_name)
 
-        if detail == "User not found.":
-            error_status = status.HTTP_404_NOT_FOUND
-        else:
-            error_status = status.HTTP_409_CONFLICT
 
-        raise HTTPException(
-            status_code=error_status,
-            detail=detail,
-        )
+@router.delete(
+    "/users/{user_id}/roles/{role_name}",
+    response_model=AdminActionResponse,
+)
+def remove_user_role(
+    user_id: UUID,
+    role_name: RoleName,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = admin_service.remove_role(db, user_id, role_name, admin)
+    return _action("Role removed.", user)

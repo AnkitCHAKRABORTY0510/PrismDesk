@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.user_session import UserSession
@@ -72,10 +73,10 @@ def get_active_session(
         db.commit()
         return None
 
-    # Update last activity.
-    session.last_activity_at = now
-    db.commit()
-    db.refresh(session)
+    # Update last activity at most once per minute to limit writes.
+    if now - session.last_activity_at > timedelta(seconds=60):
+        session.last_activity_at = now
+        db.commit()
 
     return session
 
@@ -102,3 +103,18 @@ def revoke_session(
     db.commit()
 
     return True
+
+
+def revoke_all_user_sessions(db: Session, user_id: UUID) -> int:
+    """Revoke every active session of a user (caller commits)."""
+
+    result = db.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+
+    return result.rowcount or 0

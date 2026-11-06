@@ -20,7 +20,8 @@ def create_admin():
             select(User)
             .join(User.roles)
             .where(Role.name == "Administrator")
-        ).scalar_one_or_none()
+            .limit(1)
+        ).scalars().first()
 
         if existing_admin:
             print("An administrator already exists.")
@@ -73,7 +74,7 @@ def create_admin():
                 (func.lower(User.username) == validated.username)
                 | (func.lower(User.email) == str(validated.email))
             )
-        ).scalar_one_or_none()
+        ).scalars().first()
 
         if duplicate:
             print("Username or email is already registered.")

@@ -1,20 +1,23 @@
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
+from app.core.security import hash_password, needs_rehash, verify_password
 from app.models.user import User
 from app.schemas.auth import RegisterRequest
-from app.core.security import hash_password
-from sqlalchemy import select, func, or_
-from app.models.role import Role
 from app.services.session_service import create_session
-from app.core.security import verify_password
+
+# Verified against when the account does not exist, so a failed login
+# costs the same time whether or not the username is registered.
+_DUMMY_HASH = hash_password("prism-desk-timing-equalizer")
 
 
 def register_user(
     db: Session,
     user_data: RegisterRequest,
 ) -> User:
-
+    # Public registration never assigns roles; an administrator assigns
+    # them during approval.
     new_user = User(
         username=user_data.username,
         email=str(user_data.email),
@@ -37,6 +40,7 @@ def register_user(
 
     return new_user
 
+
 def login_user(
     db: Session,
     identifier: str,
@@ -52,11 +56,12 @@ def login_user(
         )
     ).scalar_one_or_none()
 
+    if not user:
+        verify_password(password, _DUMMY_HASH)
+        raise ValueError("Invalid username/email or password.")
+
     # Reject invalid credentials.
-    if not user or not verify_password(
-        password,
-        user.password_hash,
-    ):
+    if not verify_password(password, user.password_hash):
         raise ValueError("Invalid username/email or password.")
 
     # Only approved accounts can log in.
@@ -64,6 +69,10 @@ def login_user(
         raise PermissionError(
             "Your account is not approved for login."
         )
+
+    # Upgrade the stored hash when Argon2 parameters change.
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(password)
 
     # Create a server-managed session.
     token, session = create_session(

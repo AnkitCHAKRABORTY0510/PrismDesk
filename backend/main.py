@@ -1,15 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException
-from app.api.router import api_router
 
+from app.api.router import api_router
+from app.core.config import settings
+from app.core.errors import ServiceError
+from app.core.logging import configure_logging
 from app.database.session import engine
 
-# --------------------------------------------------
-# FastAPI Application Configuration
-# --------------------------------------------------
+configure_logging()
 
 app = FastAPI(
     title="Prism Desk API",
@@ -28,31 +29,47 @@ app = FastAPI(
     - Daily Research Handbook
     - Conference Tracker
     - Discord Notifications
+    - Dashboards
     - Audit History
+
+    State-changing requests authenticated by the session cookie must send
+    the `X-CSRF-Token` header returned by `/api/v1/auth/login` and
+    `/api/v1/auth/me`.
     """,
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if settings.API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if settings.API_DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if settings.API_DOCS_ENABLED else None,
 )
-
-# --------------------------------------------------
-# CORS Configuration
-# --------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", settings.CSRF_HEADER_NAME],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
+@app.exception_handler(ServiceError)
+async def service_error_handler(request: Request, error: ServiceError):
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": error.detail},
+    )
+
 
 app.include_router(api_router)
 
-# --------------------------------------------------
-# System Endpoints
-# --------------------------------------------------
 
 @app.get("/", tags=["System"])
 def root():
@@ -69,6 +86,8 @@ def health():
         "application": "Prism Desk",
         "status": "healthy",
     }
+
+
 @app.get("/health/database", tags=["System"])
 def database_health():
     try:
