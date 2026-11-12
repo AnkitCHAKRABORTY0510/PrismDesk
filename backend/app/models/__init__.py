@@ -11,6 +11,7 @@ from app.models.notification import (
     NotificationPreference,
 )
 from app.models.conference import Conference, ProjectConference
+from app.models.journal import Journal
 from app.models.handbook import (
     DailySummary,
     DailySummaryVersion,
@@ -20,6 +21,7 @@ from app.models.handbook import (
 )
 from app.models.task import Task, TaskAssignment, TaskReview, TaskSubmission
 from app.models.project import Project, ProjectMember
+from app.models.project_link import ProjectRepoLink
 from app.models.research import (
     PaperReadingProgress,
     ProjectPaper,
@@ -40,6 +42,7 @@ __all__ = [
     "NotificationPreference",
     "Conference",
     "ProjectConference",
+    "Journal",
     "HandbookEntry",
     "HandbookEntryVersion",
     "DailySummary",
@@ -51,6 +54,7 @@ __all__ = [
     "TaskReview",
     "Project",
     "ProjectMember",
+    "ProjectRepoLink",
     "ResearchPaper",
     "ProjectPaper",
     "PaperReadingProgress",

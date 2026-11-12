@@ -1,11 +1,9 @@
-import httpx
 import pytest
 from sqlalchemy import select
 
 from app.core.config import settings
 from app.models.notification import DiscordAccount, Notification
 from app.models.research import ResearchPaper
-from app.services import doi_lookup
 from app.services.discord_client import DeliveryResult
 from app.workers import notification_worker
 
@@ -77,46 +75,3 @@ def test_linking_paper_notifies_project_members(db, login, make_user, make_proje
     dm = db.scalar(select(Notification).where(Notification.recipient_id == member.id))
     assert dm.event_type == "paper.linked" and dm.category == "research"
     assert db.scalar(select(Notification).where(Notification.recipient_id == owner.id)) is None
-
-
-def test_doi_lookup_parses_metadata_and_flags_duplicates(login, student, monkeypatch):
-    csl = {
-        "title": "Attention Is All You Need",
-        "author": [{"given": "Ashish", "family": "Vaswani"}, {"literal": "Google Brain"}],
-        "issued": {"date-parts": [[2017, 6]]},
-        "container-title": "NeurIPS",
-        "abstract": "<jats:p>Transformers &amp; attention.</jats:p>",
-        "URL": "https://doi.org/10.48550/arxiv.1706.03762",
-        "subject": ["Machine Learning"],
-    }
-
-    def fake_get(url, **kwargs):
-        assert url.endswith("/10.48550/arxiv.1706.03762")
-        return httpx.Response(200, json=csl, request=httpx.Request("GET", url))
-
-    monkeypatch.setattr(doi_lookup.httpx, "get", fake_get)
-    api = login(student)
-    body = api.get(f"{R}/lookup", params={"doi": "https://doi.org/10.48550/arXiv.1706.03762"}).json()
-    assert body["title"] == "Attention Is All You Need"
-    assert body["authors"] == ["Ashish Vaswani", "Google Brain"]
-    assert body["publication_year"] == 2017 and body["abstract"] == "Transformers & attention."
-    assert body["existing_paper_id"] is None
-
-    created = api.post(f"{R}/papers", json={"title": body["title"], "doi": body["doi"]}).json()
-    again = api.get(f"{R}/lookup", params={"doi": "10.48550/arxiv.1706.03762"}).json()
-    assert again["existing_paper_id"] == created["id"]
-
-
-def test_doi_lookup_errors_and_permissions(login, student, guest, monkeypatch):
-    monkeypatch.setattr(
-        doi_lookup.httpx, "get", lambda url, **kw: httpx.Response(404, request=httpx.Request("GET", url))
-    )
-    assert login(student).get(f"{R}/lookup", params={"doi": "10.1000/missing"}).status_code == 404
-    assert login(student).get(f"{R}/lookup", params={"doi": "not a doi"}).status_code == 422
-    assert login(guest).get(f"{R}/lookup", params={"doi": "10.1000/x"}).status_code == 403
-
-    def offline(url, **kw):
-        raise httpx.ConnectError("offline")
-
-    monkeypatch.setattr(doi_lookup.httpx, "get", offline)
-    assert login(student).get(f"{R}/lookup", params={"doi": "10.1000/x"}).status_code == 502

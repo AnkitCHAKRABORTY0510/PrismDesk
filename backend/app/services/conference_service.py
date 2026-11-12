@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.core.errors import ConflictError, ForbiddenError, NotFoundError
+from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.permissions import ADMINISTRATOR, PROFESSOR, has_capability
 from app.models.conference import Conference, ProjectConference
 from app.models.project import Project
@@ -311,3 +311,91 @@ def unlink_conference(db: Session, user: User, conference_id: UUID, project_id: 
     db.delete(link)
     record_audit(db, user.id, "conference.unlinked", "conference", conference_id, {"project_id": project_id})
     _commit(db)
+
+
+# --- Browse catalog ----------------------------------------------------------
+
+
+def catalog_conference_name(view: dict) -> str:
+    """Name used for a conference added from the catalog, e.g. ``AAAI 2027``."""
+    return f"{view['acronym']} {view['year']}" if view.get("year") else view["acronym"]
+
+
+def catalog_matches(db: Session, user: User, names: list[str]) -> dict[str, UUID]:
+    """Map lower-cased catalog names to conferences already in the user's list."""
+    if not names:
+        return {}
+    statement = select(func.lower(Conference.name), Conference.id).where(
+        func.lower(Conference.name).in_({n.lower() for n in names})
+    )
+    condition = _visibility_filter(user)
+    if condition is not None:
+        statement = statement.where(condition)
+    matches: dict[str, UUID] = {}
+    for name, conference_id in db.execute(statement.order_by(Conference.created_at)).all():
+        matches.setdefault(name, conference_id)  # the oldest record wins
+    return matches
+
+
+def _catalog_create_payload(view: dict, project_id: UUID | None) -> ConferenceCreate:
+    from app.services.conference_catalog import SOURCE_NAME
+
+    dates = []
+    if view["next_abstract_deadline"] and view["next_abstract_deadline"] != view["next_deadline"]:
+        dates.append({"label": "Abstract deadline", "date": view["next_abstract_deadline"]})
+    for item in view["timeline"]:
+        if item["deadline"] and item["deadline"] != view["next_deadline"]:
+            label = f"Submission deadline ({item['comment']})" if item["comment"] else "Other submission deadline"
+            dates.append({"label": label[:100], "date": item["deadline"]})
+    ranks = ", ".join(
+        f"{label} {value}" for label, value in (("CORE", view["core_rank"]), ("CCF", view["ccf_rank"])) if value
+    )
+    notes = [view["name"]]
+    if view["next_deadline_comment"]:
+        notes.append(f"Deadline: {view['next_deadline_comment']}")
+    if view["conference_dates"]:
+        notes.append(f"Conference dates: {view['conference_dates']}")
+    if ranks:
+        notes.append(f"Ranks: {ranks}")
+    if view["timezone"]:
+        notes.append(f"Deadline timezone in source: {view['timezone']}")
+    if view["dblp_url"]:
+        notes.append(f"DBLP: {view['dblp_url']}")
+    notes.append(f"Imported from {SOURCE_NAME} (MIT); verify dates on the official site.")
+
+    return ConferenceCreate(
+        name=catalog_conference_name(view),
+        acronym=view["acronym"][:50],
+        website_url=view["website_url"],
+        cfp_url=view["wikicfp_url"],
+        submission_deadline=view["next_deadline"],
+        important_dates=dates[:20],
+        location=(view["place"] or "")[:200] or None,
+        notes="\n".join(notes)[:5000],
+        project_id=project_id,
+    )
+
+
+def add_from_catalog(db: Session, user: User, view: dict, project_id: UUID | None) -> tuple[Conference, bool]:
+    """Add a catalog conference to the list, reusing an existing record.
+
+    An existing conference with the same edition name (e.g. "AAAI 2027")
+    is reused even if its deadline was entered differently, so adding
+    twice never creates duplicates. Returns (conference, existed).
+    """
+    if not has_capability(user.role_names, "conferences.create"):
+        raise ForbiddenError("You cannot add conferences.")
+    if view["deadline_status"] != "upcoming" or not view["next_deadline"]:
+        raise BadRequestError(
+            "This conference has no announced upcoming deadline yet. Add it manually once the call for papers is out."
+        )
+
+    existing_id = catalog_matches(db, user, [catalog_conference_name(view)]).get(catalog_conference_name(view).lower())
+    if existing_id:
+        conference = get_conference(db, user, existing_id)
+        if project_id:
+            _link(db, user, conference.id, project_id)
+            _commit(db)
+        return conference, True
+
+    return create_conference(db, user, _catalog_create_payload(view, project_id))

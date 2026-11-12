@@ -84,6 +84,56 @@ class DiscordSender:
             result.channel_id = response.json().get("id")
         return result
 
+    # --- Guild channel management (private per-project channels) -------------
+
+    def bot_user_id(self) -> str | None:
+        """The bot's own Discord user ID (cached after the first lookup)."""
+
+        if getattr(self, "_bot_user_id", None) is None:
+            response = self._client.get(f"{settings.DISCORD_API_BASE_URL}/users/@me", headers=self._headers())
+            if response.is_success:
+                self._bot_user_id = str(response.json().get("id") or "") or None
+            else:
+                return None
+        return self._bot_user_id
+
+    def create_text_channel(
+        self, guild_id: str, name: str, overwrites: list[dict], parent_id: str | None = None, topic: str = ""
+    ) -> DeliveryResult:
+        payload = {"name": name[:100], "type": 0, "permission_overwrites": overwrites, "topic": topic[:1024]}
+        if parent_id:
+            payload["parent_id"] = parent_id
+        response = self._client.post(
+            f"{settings.DISCORD_API_BASE_URL}/guilds/{guild_id}/channels", headers=self._headers(), json=payload
+        )
+        result = self._result(response)
+        if result.success:
+            result.channel_id = response.json().get("id")
+        return result
+
+    def rename_channel(self, channel_id: str, name: str) -> DeliveryResult:
+        response = self._client.patch(
+            f"{settings.DISCORD_API_BASE_URL}/channels/{channel_id}", headers=self._headers(), json={"name": name[:100]}
+        )
+        return self._result(response)
+
+    def set_member_permissions(self, channel_id: str, user_id: str, allow: int, deny: int = 0) -> DeliveryResult:
+        """Create or replace a member permission overwrite (type 1 = member)."""
+
+        response = self._client.put(
+            f"{settings.DISCORD_API_BASE_URL}/channels/{channel_id}/permissions/{user_id}",
+            headers=self._headers(),
+            json={"type": 1, "allow": str(allow), "deny": str(deny)},
+        )
+        return self._result(response)
+
+    def remove_member_permissions(self, channel_id: str, user_id: str) -> DeliveryResult:
+        response = self._client.delete(
+            f"{settings.DISCORD_API_BASE_URL}/channels/{channel_id}/permissions/{user_id}", headers=self._headers()
+        )
+        # Already gone counts as removed.
+        return DeliveryResult(True, 404) if response.status_code == 404 else self._result(response)
+
 
 def oauth_authorize_url(state: str) -> str:
     query = urlencode(

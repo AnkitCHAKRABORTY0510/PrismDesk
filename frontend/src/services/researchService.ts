@@ -23,16 +23,21 @@ export interface Paper {
   discord_thread_url: string | null;
 }
 
-export interface DoiLookup {
+/** Metadata suggested by the Quick add lookup. Nothing is saved until the form is. */
+export interface PaperLookup {
   title: string | null;
   authors: string[];
   abstract: string;
   publication_year: number | null;
   venue: string | null;
-  doi: string;
+  doi: string | null;
   url: string | null;
   keywords: string[];
   existing_paper_id: string | null;
+  /** What the query was recognised as. */
+  matched_by: "doi" | "arxiv" | "url" | "title" | null;
+  /** Where the metadata came from, e.g. "crossref", "arxiv", "webpage+crossref". */
+  source: string | null;
 }
 
 export interface PaperInput {
@@ -70,12 +75,15 @@ const base = "/api/v1/research";
 
 export const listPapers = async (params: QueryParams = {}) =>
   (await api.get<Page<Paper>>(`${base}/papers`, { params: cleanParams(params) })).data;
-export const lookupDoi = async (doi: string) =>
-  (await api.get<DoiLookup>(`${base}/lookup`, { params: { doi } })).data;
+/** Look up metadata for a DOI, arXiv ID/link, paper web page or title. */
+export const lookupPaper = async (query: string) =>
+  (await api.get<PaperLookup>(`${base}/lookup`, { params: { q: query } })).data;
 export const getPaper = async (id: string) => (await api.get<Paper>(`${base}/papers/${id}`)).data;
 export const createPaper = async (input: PaperInput) => (await api.post<Paper>(`${base}/papers`, input)).data;
 export const updatePaper = async (id: string, input: Partial<PaperInput>) =>
   (await api.patch<Paper>(`${base}/papers/${id}`, input)).data;
+export const deletePaper = async (id: string) =>
+  (await api.delete<MessageResponse>(`${base}/papers/${id}`)).data;
 export const linkPaper = async (id: string, projectId: string) =>
   (await api.post<Paper>(`${base}/papers/${id}/projects`, { project_id: projectId })).data;
 export const unlinkPaper = async (id: string, projectId: string) =>

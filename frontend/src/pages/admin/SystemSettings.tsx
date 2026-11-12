@@ -19,11 +19,11 @@ export default function SystemSettings() {
           <Loading />
         ) : (
           data && (
-            <dl className="divide-y divide-slate-100 text-sm">
+            <dl className="divide-y divide-line text-sm">
               {Object.entries(data).map(([key, value]) => (
                 <div key={key} className="flex justify-between gap-4 py-2">
-                  <dt className="text-slate-500">{humanize(key)}</dt>
-                  <dd className="text-right font-medium text-slate-800">
+                  <dt className="text-fg-muted">{humanize(key)}</dt>
+                  <dd className="text-right font-medium text-fg">
                     {Array.isArray(value) ? value.join(", ") : typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
                   </dd>
                 </div>

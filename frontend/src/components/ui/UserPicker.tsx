@@ -39,24 +39,24 @@ export function UserPicker({
   return (
     <div className="space-y-2">
       <Input aria-label={label} placeholder="Type at least 2 letters of a name…" value={query} onChange={(e) => setQuery(e.target.value)} />
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-danger-fg">{error}</p>}
       {visible.length > 0 && (
-        <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+        <ul className="max-h-56 divide-y divide-line overflow-y-auto rounded-lg border border-line">
           {visible.map((user) => (
             <li key={user.id}>
               <button
                 type="button"
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-muted"
                 onClick={() => {
                   onSelect(user);
                   setQuery("");
                 }}
               >
                 <span>
-                  <strong className="font-medium text-slate-800">{user.full_name}</strong>{" "}
-                  <span className="text-slate-500">@{user.username}</span>
+                  <strong className="font-medium text-fg">{user.full_name}</strong>{" "}
+                  <span className="text-fg-muted">@{user.username}</span>
                 </span>
-                <span className="text-xs text-slate-400">{user.roles.join(", ")}</span>
+                <span className="text-xs text-fg-subtle">{user.roles.join(", ")}</span>
               </button>
             </li>
           ))}

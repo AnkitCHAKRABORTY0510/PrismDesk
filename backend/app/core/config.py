@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: int = 10
     REGISTER_RATE_LIMIT: int = 5
     RATE_LIMIT_WINDOW_SECONDS: int = 300
+    # Paper metadata lookups make outbound requests, so they are limited too.
+    PAPER_LOOKUP_RATE_LIMIT: int = 60
 
     # Project retention before permanent deletion is allowed.
     PROJECT_DELETE_RETENTION_DAYS: int = 90
@@ -53,9 +55,20 @@ class Settings(BaseSettings):
     DISCORD_RESEARCH_CHANNEL_ID: str = ""
     # Server (guild) ID, used to build "Discuss on Discord" links.
     DISCORD_GUILD_ID: str = ""
+    # One private channel per project, visible only to its members (needs the
+    # bot to have Manage Channels + Manage Roles). Optional category to hold them.
+    DISCORD_PROJECT_CHANNELS: bool = True
+    DISCORD_PROJECT_CATEGORY_ID: str = ""
 
     # Used to fetch paper metadata for a DOI (doi.org content negotiation).
     DOI_LOOKUP_URL: str = "https://doi.org"
+    # Paper metadata sources for the "Quick add" lookup (metadata only).
+    CROSSREF_API_URL: str = "https://api.crossref.org"
+    ARXIV_API_URL: str = "https://export.arxiv.org/api/query"
+    OPENALEX_API_URL: str = "https://api.openalex.org"
+    # Optional free OpenAlex key (openalex.org/settings/api). Without it the
+    # journal catalog shares OpenAlex's small anonymous daily budget.
+    OPENALEX_API_KEY: str = ""
     DISCORD_API_BASE_URL: str = "https://discord.com/api/v10"
 
     # Notification worker.

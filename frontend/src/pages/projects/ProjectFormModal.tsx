@@ -56,7 +56,7 @@ export default function ProjectFormModal({
         <Field label="Description">{(id) => <Textarea id={id} value={description} onChange={(e) => setDescription(e.target.value)} />}</Field>
         <Field label="Research objectives">{(id) => <Textarea id={id} value={objectives} onChange={(e) => setObjectives(e.target.value)} />}</Field>
         {!project && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-fg-muted">
             You become the project owner. Administrators and supervising professors manage membership.
           </p>
         )}

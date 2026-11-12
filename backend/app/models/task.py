@@ -17,7 +17,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.session import Base
 from app.models.columns import created_at, optional_timestamp, updated_at, user_fk, uuid_pk
 
-TASK_TYPES = ("official", "personal")
+# "reminder": a nudge sent to other users, usually about a related task.
+TASK_TYPES = ("official", "personal", "reminder")
 TASK_PRIORITIES = ("low", "medium", "high", "urgent")
 ASSIGNMENT_STATUSES = ("todo", "in_progress", "under_review", "revision_required", "completed")
 
@@ -26,7 +27,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     __table_args__ = (
-        CheckConstraint("task_type IN ('official', 'personal')", name="ck_tasks_type"),
+        CheckConstraint("task_type IN ('official', 'personal', 'reminder')", name="ck_tasks_type"),
         CheckConstraint(
             "priority IN ('low', 'medium', 'high', 'urgent')", name="ck_tasks_priority"
         ),
@@ -37,6 +38,7 @@ class Task(Base):
         Index("ix_tasks_project_id", "project_id"),
         Index("ix_tasks_created_by", "created_by"),
         Index("ix_tasks_due_at", "due_at"),
+        Index("ix_tasks_related_task_id", "related_task_id"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -47,6 +49,12 @@ class Task(Base):
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
     )
     created_by: Mapped[uuid.UUID | None] = user_fk(nullable=True)
+    # Reminders point at the task they are about (deleted with it).
+    related_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="CASCADE", name="fk_tasks_related_task_id_tasks"),
+        nullable=True,
+    )
     priority: Mapped[str] = mapped_column(
         String(10), nullable=False, default="medium", server_default="medium"
     )

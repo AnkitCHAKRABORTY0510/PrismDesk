@@ -115,14 +115,23 @@ def test_reading_progress_is_independent(login, make_user):
     assert login(b).get(f"{R}/papers", params={"reading_status": "not_started"}).json()["total"] >= 1
 
 
-def test_professor_cannot_track_progress_but_sees_project_progress(login, student, professor, make_project):
-    project = make_project(student, members=[(professor, "supervisor")])
+def test_every_library_user_tracks_own_progress_and_supervisor_sees_project_progress(
+    login, student, professor, admin, guest, make_project
+):
+    project = make_project(student, members=[(professor, "supervisor"), (guest, "guest")])
     paper = login(student).post(f"{R}/papers", json=_paper(project_id=str(project.id))).json()
-    assert login(professor).put(f"{R}/papers/{paper['id']}/progress", json={"status": "reading"}).status_code == 403
+    # Professors and administrators keep their own reading status too.
+    assert login(professor).put(f"{R}/papers/{paper['id']}/progress", json={"status": "completed"}).status_code == 200
+    assert login(admin).put(f"{R}/papers/{paper['id']}/progress", json={"status": "reading"}).status_code == 200
+    assert login(professor).get(f"{R}/papers/{paper['id']}").json()["my_status"] == "completed"
+    assert login(student).get(f"{R}/papers/{paper['id']}").json()["my_status"] is None
+    # Guests have no research library access.
+    assert login(guest).put(f"{R}/papers/{paper['id']}/progress", json={"status": "reading"}).status_code == 403
 
     login(student).put(f"{R}/papers/{paper['id']}/progress", json={"status": "reading", "project_id": str(project.id)})
     rows = login(professor).get(f"{R}/projects/{project.id}/progress").json()
-    assert rows[0]["status"] == "reading" and rows[0]["username"] == student.username
+    student_rows = [row for row in rows if row["username"] == student.username]
+    assert student_rows[0]["status"] == "reading"
     assert login(student).get(f"{R}/projects/{project.id}/progress").status_code == 403
 
 
@@ -139,3 +148,59 @@ def test_private_notes_hidden_from_everyone_else(login, student, admin, professo
 
     assert login(student).patch(f"{R}/notes/{note['id']}", json={"content": "updated"}).json()["content"] == "updated"
     assert login(student).delete(f"{R}/notes/{note['id']}").status_code == 200
+
+
+def test_delete_paper_removes_links_progress_and_notes(db, login, admin, student, make_project):
+    from sqlalchemy import func, select
+
+    from app.models.audit_log import AuditLog
+    from app.models.research import PaperReadingProgress, ProjectPaper, ResearchNote, ResearchPaper
+
+    project = make_project(student)
+    api = login(student)
+    paper = api.post(f"{R}/papers", json=_paper(project_id=str(project.id))).json()
+    api.put(f"{R}/papers/{paper['id']}/progress", json={"status": "reading"})
+    api.post(f"{R}/papers/{paper['id']}/notes", json={"content": "mine"})
+
+    response = login(admin).delete(f"{R}/papers/{paper['id']}")
+    assert response.status_code == 200, response.text
+
+    def count(model, column):
+        return db.scalar(select(func.count()).select_from(model).where(column == paper["id"]))
+
+    assert db.get(ResearchPaper, paper["id"]) is None
+    assert count(ProjectPaper, ProjectPaper.paper_id) == 0
+    assert count(PaperReadingProgress, PaperReadingProgress.paper_id) == 0
+    assert count(ResearchNote, ResearchNote.paper_id) == 0
+    assert db.scalar(select(AuditLog).where(AuditLog.action == "paper.deleted", AuditLog.entity_id == paper["id"]))
+    assert api.get(f"{R}/papers/{paper['id']}").status_code == 404
+    assert login(admin).delete(f"{R}/papers/{paper['id']}").status_code == 404
+
+
+def test_delete_paper_permissions(login, student, professor, make_user, make_project):
+    other = make_user("Student")
+    api = login(student)
+
+    # Only people who can edit the paper may delete it.
+    paper = api.post(f"{R}/papers", json=_paper()).json()
+    assert login(other).delete(f"{R}/papers/{paper['id']}").status_code == 403
+
+    # The adder cannot delete a paper a project uses, or one others wrote notes on.
+    project = make_project(student)
+    used = api.post(f"{R}/papers", json=_paper(doi="10.1000/used", url=None, project_id=str(project.id))).json()
+    assert api.delete(f"{R}/papers/{used['id']}").status_code == 403
+    login(other).post(f"{R}/papers/{paper['id']}/notes", json={"content": "their note"})
+    assert api.delete(f"{R}/papers/{paper['id']}").status_code == 403
+
+    # An unused paper can be deleted by the adder, and by a professor.
+    own = api.post(f"{R}/papers", json=_paper(doi="10.1000/own", url=None)).json()
+    api.post(f"{R}/papers/{own['id']}/notes", json={"content": "my own note"})
+    assert api.delete(f"{R}/papers/{own['id']}").status_code == 200
+    spare = api.post(f"{R}/papers", json=_paper(doi="10.1000/spare", url=None)).json()
+    assert login(professor).delete(f"{R}/papers/{spare['id']}").status_code == 200
+
+
+def test_delete_paper_requires_login_and_hides_from_guests(client, login, guest, student):
+    paper = login(student).post(f"{R}/papers", json=_paper()).json()
+    assert client.delete(f"{R}/papers/{paper['id']}").status_code == 401
+    assert login(guest).delete(f"{R}/papers/{paper['id']}").status_code == 404

@@ -93,7 +93,7 @@ export default function ConferenceFormModal({
         </Field>
         <Field label="Location">{(id) => <Input id={id} value={location} onChange={(e) => setLocation(e.target.value)} />}</Field>
         <fieldset className="space-y-2 sm:col-span-2">
-          <legend className="text-sm font-medium text-slate-700">Important dates</legend>
+          <legend className="text-sm font-medium text-fg-soft">Important dates</legend>
           {dates.map((row, index) => (
             <div key={index} className="flex gap-2">
               <Input aria-label="Date label" placeholder="e.g. Notification" value={row.label} onChange={(e) => setDates(dates.map((d, i) => (i === index ? { ...d, label: e.target.value } : d)))} />

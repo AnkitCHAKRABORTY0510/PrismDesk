@@ -60,7 +60,7 @@ export default function AuditLogs() {
                   {
                     header: "Details",
                     cell: (row) => (
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-fg-muted">
                         {Object.entries(row.details)
                           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.length + " items" : String(value)}`)
                           .join(" · ")}

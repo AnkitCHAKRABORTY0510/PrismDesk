@@ -30,6 +30,7 @@ import {
   type Project,
 } from "../../services/projectService";
 import ProjectFormModal from "./ProjectFormModal";
+import RepoLinksCard from "./RepoLinksCard";
 import {
   AnalyticsTab,
   ConferencesTab,
@@ -141,22 +142,23 @@ function Overview({ project, onChanged }: { project: Project; onChanged: (projec
       <Card title="About" className="lg:col-span-2" actions={perms.can_edit && <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>Edit</Button>}>
         <div className="space-y-4 text-sm">
           <div>
-            <h3 className="font-medium text-slate-700">Description</h3>
-            <p className="mt-1 whitespace-pre-line text-slate-600">{project.description || "—"}</p>
+            <h3 className="font-medium text-fg-soft">Description</h3>
+            <p className="mt-1 whitespace-pre-line text-fg-soft">{project.description || "—"}</p>
           </div>
           <div>
-            <h3 className="font-medium text-slate-700">Research objectives</h3>
-            <p className="mt-1 whitespace-pre-line text-slate-600">{project.objectives || "—"}</p>
+            <h3 className="font-medium text-fg-soft">Research objectives</h3>
+            <p className="mt-1 whitespace-pre-line text-fg-soft">{project.objectives || "—"}</p>
           </div>
         </div>
       </Card>
       <div className="space-y-6">
+        <RepoLinksCard project={project} />
         <Card title="Details">
           <dl className="space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-slate-500">Created</dt><dd>{formatDateTime(project.created_at)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Last updated</dt><dd>{formatDateTime(project.updated_at)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Members</dt><dd>{project.member_count}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-slate-500">Supervisors</dt><dd className="text-right">{project.supervisors.map((s) => s.full_name).join(", ") || "—"}</dd></div>
+            <div className="flex justify-between"><dt className="text-fg-muted">Created</dt><dd>{formatDateTime(project.created_at)}</dd></div>
+            <div className="flex justify-between"><dt className="text-fg-muted">Last updated</dt><dd>{formatDateTime(project.updated_at)}</dd></div>
+            <div className="flex justify-between"><dt className="text-fg-muted">Members</dt><dd>{project.member_count}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-fg-muted">Supervisors</dt><dd className="text-right">{project.supervisors.map((s) => s.full_name).join(", ") || "—"}</dd></div>
           </dl>
           {project.archive_requested_at && project.status === "active" && (
             <div className="mt-4"><Alert kind="info">Archival requested on {formatDate(project.archive_requested_at)}{project.archive_request_reason ? `: ${project.archive_request_reason}` : "."}</Alert></div>
@@ -170,7 +172,7 @@ function Overview({ project, onChanged }: { project: Project; onChanged: (projec
             {perms.can_delete && <Button size="sm" variant="danger" onClick={() => setConfirm("delete")}>Delete</Button>}
             {perms.can_restore && <Button size="sm" onClick={() => setConfirm("restore")}>Restore</Button>}
             {perms.can_restore && <Button size="sm" variant="danger" onClick={() => setConfirm("purge")}>Delete permanently</Button>}
-            {!Object.values(perms).some(Boolean) && <p className="text-sm text-slate-500">No lifecycle actions available.</p>}
+            {!Object.values(perms).some(Boolean) && <p className="text-sm text-fg-muted">No lifecycle actions available.</p>}
           </div>
         </Card>
       </div>

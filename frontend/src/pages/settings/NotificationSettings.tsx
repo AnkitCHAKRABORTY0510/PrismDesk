@@ -21,6 +21,7 @@ import {
   getPreferences,
   myNotifications,
   savePreferences,
+  sendDiscordTest,
   startDiscordLink,
   unlinkDiscord,
   type Preference,
@@ -29,9 +30,9 @@ import {
 const DESCRIPTIONS: Record<string, string> = {
   tasks: "Assignments, submissions, reviews and due-date reminders",
   projects: "New projects, membership changes and archival requests",
-  research: "Papers added to your projects",
+  research: "Papers added to your projects, and general papers or videos shared with the whole lab",
   conferences: "Upcoming conference submission deadlines",
-  handbook: "Comments and replies on handbook entries",
+  handbook: "Comments on handbook entries and your planner reminders",
   administrative: "Account approval and lab announcements",
 };
 
@@ -50,6 +51,7 @@ export default function NotificationSettings() {
   const [edited, setDraft] = useState<Preference[] | null>(null);
   const draft = edited ?? prefs.data ?? [];
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [page, setPage] = useState(1);
   const history = useAsync(() => myNotifications({ page, page_size: 10 }), [page]);
   const result = RESULT_MESSAGES[params.get("discord") ?? ""];
@@ -83,20 +85,38 @@ export default function NotificationSettings() {
                   <p>
                     Linked as <strong>{status.data.discord_username}</strong> since {formatDateTime(status.data.linked_at)}.
                   </p>
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      try {
-                        await unlinkDiscord();
-                        notify("Discord account unlinked.", "info");
-                        await status.reload();
-                      } catch (err) {
-                        notify(getErrorMessage(err), "error");
-                      }
-                    }}
-                  >
-                    Unlink Discord
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      loading={testing}
+                      onClick={async () => {
+                        setTesting(true);
+                        try {
+                          notify((await sendDiscordTest()).message, "info");
+                          await history.reload();
+                        } catch (err) {
+                          notify(getErrorMessage(err), "error");
+                        } finally {
+                          setTesting(false);
+                        }
+                      }}
+                    >
+                      Send test message
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={async () => {
+                        try {
+                          await unlinkDiscord();
+                          notify("Discord account unlinked.", "info");
+                          await status.reload();
+                        } catch (err) {
+                          notify(getErrorMessage(err), "error");
+                        }
+                      }}
+                    >
+                      Unlink Discord
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <>
@@ -108,7 +128,7 @@ export default function NotificationSettings() {
                   )}
                 </>
               )}
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-fg-muted">
                 Linking uses Discord OAuth2 with the “identify” scope only. Prism Desk stores your Discord user ID and
                 username — never your Discord password or access tokens.
               </p>
@@ -119,12 +139,12 @@ export default function NotificationSettings() {
 
       <Card title="Notification categories">
         <ErrorMessage message={prefs.error} onRetry={prefs.reload} />
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-line">
           {draft.map((pref) => (
             <li key={pref.category} className="flex items-center justify-between gap-4 py-3 text-sm">
               <div>
                 <div className="font-medium">{humanize(pref.category)}</div>
-                <div className="text-xs text-slate-500">{DESCRIPTIONS[pref.category]}</div>
+                <div className="text-xs text-fg-muted">{DESCRIPTIONS[pref.category]}</div>
               </div>
               <label className="flex items-center gap-2">
                 <input

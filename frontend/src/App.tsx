@@ -16,6 +16,7 @@ import ConferenceList from "./pages/conferences/ConferenceList";
 import Dashboard from "./pages/dashboard/Dashboard";
 import EntryDetail from "./pages/handbook/EntryDetail";
 import Handbook from "./pages/handbook/Handbook";
+import JournalList from "./pages/journals/JournalList";
 import ProjectDetail from "./pages/projects/ProjectDetail";
 import ProjectList from "./pages/projects/ProjectList";
 import PaperDetail from "./pages/research/PaperDetail";
@@ -73,6 +74,9 @@ export function AppRoutes() {
           </Route>
 
           <Route path="/conferences" element={<ConferenceList />} />
+          <Route element={<ProtectedRoute capability="journals.view" />}>
+            <Route path="/journals" element={<JournalList />} />
+          </Route>
           <Route path="/settings/notifications" element={<NotificationSettings />} />
 
           <Route element={<ProtectedRoute capability="users.manage" />}>

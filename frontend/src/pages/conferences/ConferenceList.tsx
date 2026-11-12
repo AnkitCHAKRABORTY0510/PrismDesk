@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSearchParams } from "react-router";
 
 import { PageHeader } from "../../components/layout/PageHeader";
 import {
@@ -12,10 +13,12 @@ import {
   Loading,
   Pagination,
   SearchInput,
+  Tabs,
   useToast,
 } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { useAsync, useDebounced } from "../../hooks/useAsync";
+import { useNow } from "../../hooks/useNow";
 import { countdown, formatDateTime } from "../../lib/format";
 import { can } from "../../lib/permissions";
 import { getErrorMessage } from "../../services/api";
@@ -26,17 +29,10 @@ import {
   unlinkConference,
   type Conference,
 } from "../../services/conferenceService";
+import ConferenceCatalog from "./ConferenceCatalog";
 import ConferenceFormModal from "./ConferenceFormModal";
 
-// Re-render every minute so countdowns stay current.
-function useNow(intervalMs = 60000) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), intervalMs);
-    return () => window.clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-}
+type ConferenceTab = "mine" | "browse";
 
 export function ConferenceCards({
   items,
@@ -64,7 +60,7 @@ export function ConferenceCards({
     }
   };
 
-  if (items.length === 0) return <p className="py-6 text-center text-sm text-slate-500">No conferences found.</p>;
+  if (items.length === 0) return <p className="py-6 text-center text-sm text-fg-muted">No conferences found.</p>;
 
   return (
     <>
@@ -73,17 +69,17 @@ export function ConferenceCards({
           const overdue = new Date(c.submission_deadline) < now;
           const links = projectId ? c.projects.filter((p) => p.project_id === projectId) : c.projects;
           return (
-            <li key={c.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <li key={c.id} className="rounded-xl border border-line bg-surface p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold text-slate-800">{c.name}</h3>
-                  <p className="text-xs text-slate-500">{[c.acronym, c.location].filter(Boolean).join(" · ")}</p>
+                  <h3 className="font-semibold text-fg">{c.name}</h3>
+                  <p className="text-xs text-fg-muted">{[c.acronym, c.location].filter(Boolean).join(" · ")}</p>
                 </div>
                 <Badge tone={overdue ? "red" : "amber"}>{countdown(c.submission_deadline, now)}</Badge>
               </div>
-              <p className="mt-2 text-sm text-slate-600">Submission deadline: {formatDateTime(c.submission_deadline)}</p>
+              <p className="mt-2 text-sm text-fg-soft">Submission deadline: {formatDateTime(c.submission_deadline)}</p>
               {c.important_dates.length > 0 && (
-                <ul className="mt-2 text-xs text-slate-500">
+                <ul className="mt-2 text-xs text-fg-muted">
                   {c.important_dates.map((d) => (
                     <li key={d.label + d.date}>{d.label}: {formatDateTime(d.date)}</li>
                   ))}
@@ -103,11 +99,11 @@ export function ConferenceCards({
                       {link.can_manage && (
                         <span className="flex gap-2">
                           {link.status === "active" && (
-                            <button type="button" className="text-slate-500 hover:text-brand" onClick={() => void linkAction(() => archiveConferenceLink(c.id, link.project_id), "Association archived.")}>
+                            <button type="button" className="text-fg-muted hover:text-link" onClick={() => void linkAction(() => archiveConferenceLink(c.id, link.project_id), "Association archived.")}>
                               Archive
                             </button>
                           )}
-                          <button type="button" className="text-slate-500 hover:text-red-600" onClick={() => void linkAction(() => unlinkConference(c.id, link.project_id), "Removed from project.")}>
+                          <button type="button" className="text-fg-muted hover:text-danger-fg" onClick={() => void linkAction(() => unlinkConference(c.id, link.project_id), "Removed from project.")}>
                             Remove
                           </button>
                         </span>
@@ -151,6 +147,8 @@ export default function ConferenceList() {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Conference | "new" | null>(null);
+  const [params, setParams] = useSearchParams();
+  const tab: ConferenceTab = params.get("tab") === "browse" ? "browse" : "mine";
   const q = useDebounced(search);
 
   const data = useAsync(
@@ -173,31 +171,45 @@ export default function ConferenceList() {
         description="Deadlines are shown in your local timezone. One conference record is shared by every project that targets it."
         actions={can(user, "conferences.create") && <Button onClick={() => setEditing("new")}>Add conference</Button>}
       />
-      <Card>
-        <div className="mb-4 flex flex-wrap gap-3">
-          <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search name, acronym, location…" />
-          <FilterSelect
-            label="Deadline timing"
-            value={timing}
-            allLabel="All deadlines"
-            onChange={(v) => { setTiming(v); setPage(1); }}
-            options={[{ value: "upcoming", label: "Upcoming" }, { value: "overdue", label: "Passed" }]}
-          />
-          <input aria-label="Deadline from" type="date" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
-          <input aria-label="Deadline to" type="date" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
-        </div>
-        <ErrorMessage message={data.error} onRetry={data.reload} />
-        {data.loading && !data.data ? (
-          <Loading />
-        ) : (
-          data.data && (
-            <>
-              <ConferenceCards items={data.data.items} onEdit={(c) => setEditing(c)} onChanged={() => void data.reload()} />
-              <Pagination page={page} pageSize={20} total={data.data.total} onChange={setPage} />
-            </>
-          )
-        )}
-      </Card>
+      <Tabs<ConferenceTab>
+        tabs={[
+          { id: "mine", label: "My conferences" },
+          { id: "browse", label: "Browse conferences" },
+        ]}
+        active={tab}
+        onChange={(id) => setParams(id === "browse" ? { tab: "browse" } : {}, { replace: true })}
+      />
+      {tab === "browse" ? (
+        <Card>
+          <ConferenceCatalog onAdded={() => void data.reload()} />
+        </Card>
+      ) : (
+        <Card>
+          <div className="mb-4 flex flex-wrap gap-3">
+            <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search name, acronym, location…" />
+            <FilterSelect
+              label="Deadline timing"
+              value={timing}
+              allLabel="All deadlines"
+              onChange={(v) => { setTiming(v); setPage(1); }}
+              options={[{ value: "upcoming", label: "Upcoming" }, { value: "overdue", label: "Passed" }]}
+            />
+            <input aria-label="Deadline from" type="date" className="w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-fg sm:w-auto" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
+            <input aria-label="Deadline to" type="date" className="w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-fg sm:w-auto" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
+          </div>
+          <ErrorMessage message={data.error} onRetry={data.reload} />
+          {data.loading && !data.data ? (
+            <Loading />
+          ) : (
+            data.data && (
+              <>
+                <ConferenceCards items={data.data.items} onEdit={(c) => setEditing(c)} onChanged={() => void data.reload()} />
+                <Pagination page={page} pageSize={20} total={data.data.total} onChange={setPage} />
+              </>
+            )
+          )}
+        </Card>
+      )}
       {editing && (
         <ConferenceFormModal
           open

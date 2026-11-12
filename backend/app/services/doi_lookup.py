@@ -8,18 +8,15 @@ import html
 import logging
 import re
 
-import httpx
-
 from app.core.config import settings
-from app.core.errors import NotFoundError, ServiceError
+from app.core.errors import NotFoundError
+from app.services.metadata_http import LookupUnavailableError, fetch
 
 logger = logging.getLogger("prism.doi")
 
 _TAGS = re.compile(r"<[^>]+>")
 
-
-class LookupUnavailableError(ServiceError):
-    status_code = 502
+__all__ = ["LookupUnavailableError", "lookup_doi", "parse_csl"]
 
 
 def _clean(text: str | None) -> str:
@@ -38,9 +35,9 @@ def parse_csl(data: dict, doi: str) -> dict:
     authors = []
     for author in data.get("author", []) or []:
         name = " ".join(part for part in (author.get("given"), author.get("family")) if part)
-        name = name or author.get("literal") or ""
+        name = name or author.get("literal") or author.get("name") or ""
         if name:
-            authors.append(name.strip())
+            authors.append(name.strip()[:200])
 
     year = None
     for key in ("published-print", "published-online", "issued", "published"):
@@ -54,11 +51,11 @@ def parse_csl(data: dict, doi: str) -> dict:
         keywords = keywords + [k.strip() for k in data["keyword"].split(",") if k.strip()]
 
     return {
-        "title": _clean(_first(data.get("title"))) or None,
+        "title": _clean(_first(data.get("title")))[:500] or None,
         "authors": authors[:100],
         "abstract": _clean(data.get("abstract"))[:20000],
         "publication_year": year if year and 1800 <= year <= 2200 else None,
-        "venue": _clean(_first(data.get("container-title")) or data.get("publisher")) or None,
+        "venue": _clean(_first(data.get("container-title")) or data.get("publisher"))[:300] or None,
         "doi": doi,
         "url": data.get("URL") or f"https://doi.org/{doi}",
         "keywords": [k[:100] for k in keywords][:50],
@@ -66,23 +63,17 @@ def parse_csl(data: dict, doi: str) -> dict:
 
 
 def lookup_doi(doi: str) -> dict:
-    try:
-        response = httpx.get(
-            f"{settings.DOI_LOOKUP_URL.rstrip('/')}/{doi}",
-            headers={"Accept": "application/vnd.citationstyles.csl+json"},
-            follow_redirects=True,
-            timeout=10.0,
-        )
-    except httpx.HTTPError as error:
-        logger.warning("DOI lookup failed: %s", type(error).__name__)
-        raise LookupUnavailableError("Could not reach doi.org to look up this DOI.")
-
+    response = fetch(
+        f"{settings.DOI_LOOKUP_URL.rstrip('/')}/{doi}",
+        accept="application/vnd.citationstyles.csl+json",
+        service="doi.org",
+    )
     if response.status_code == 404:
         raise NotFoundError("No metadata was found for this DOI.")
-    if not response.is_success:
+    if not response.ok:
         raise LookupUnavailableError(f"doi.org returned HTTP {response.status_code}.")
 
-    try:
-        return parse_csl(response.json(), doi)
-    except ValueError:
+    data = response.json()
+    if not isinstance(data, dict):
         raise LookupUnavailableError("doi.org returned metadata in an unexpected format.")
+    return parse_csl(data, doi)

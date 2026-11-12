@@ -3,7 +3,8 @@ import { Link } from "react-router";
 import axios from "axios";
 
 import { registerUser } from "../../services/authService";
-import "./Register.css";
+import { AuthBrand, AuthThemeToggle } from "./AuthBrand";
+import "./auth.css";
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -81,10 +82,13 @@ export default function Register() {
 
   if (success) {
     return (
-      <div className="register-page">
-        <div className="register-card register-success">
+      <div className="auth-page">
+        <AuthThemeToggle />
+        <div className="auth-card auth-success">
+          <AuthBrand />
+          <div className="auth-body">
 
-          <div className="success-icon">✓</div>
+          <div className="auth-success-icon">✓</div>
 
           <h1>Registration Successful</h1>
 
@@ -92,7 +96,7 @@ export default function Register() {
             Your Prism Desk account has been created successfully.
           </p>
 
-          <div className="approval-message">
+          <div className="auth-approval">
             <strong>Waiting for Administrator Approval</strong>
 
             <p>
@@ -102,9 +106,10 @@ export default function Register() {
             </p>
           </div>
 
-          <Link to="/login" className="register-button">
+          <Link to="/login" className="auth-button">
             Return to Login
           </Link>
+          </div>
 
         </div>
       </div>
@@ -112,24 +117,27 @@ export default function Register() {
   }
 
   return (
-    <div className="register-page">
+    <div className="auth-page">
+      <AuthThemeToggle />
 
-      <div className="register-card">
+      <div className="auth-card">
 
-        <div className="register-brand">
-          <div className="register-logo">P</div>
-          <h1>Prism Desk</h1>
+        <AuthBrand />
+
+        <div className="auth-body">
+        <div className="auth-product">
+          <h1>PrismDesk</h1>
           <p>One Lab. Multiple Projects. Connected Research.</p>
         </div>
 
-        <div className="register-heading">
+        <div className="auth-heading">
           <h2>Create your account</h2>
           <p>Join the PRISM Laboratory research workspace.</p>
         </div>
 
         <form onSubmit={handleSubmit}>
 
-          <div className="register-field">
+          <div className="auth-field">
             <label htmlFor="full_name">Full Name</label>
 
             <input
@@ -144,7 +152,7 @@ export default function Register() {
             />
           </div>
 
-          <div className="register-field">
+          <div className="auth-field">
             <label htmlFor="username">Username</label>
 
             <input
@@ -163,7 +171,7 @@ export default function Register() {
             />
           </div>
 
-          <div className="register-field">
+          <div className="auth-field">
             <label htmlFor="email">Email Address</label>
 
             <input
@@ -179,10 +187,10 @@ export default function Register() {
             />
           </div>
 
-          <div className="register-field">
+          <div className="auth-field">
             <label htmlFor="password">Password</label>
 
-            <div className="register-password-wrapper">
+            <div className="auth-password">
               <input
                 id="password"
                 name="password"
@@ -199,7 +207,7 @@ export default function Register() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="register-password-toggle"
+                className="auth-password-toggle"
               >
                 {showPassword ? "Hide" : "Show"}
               </button>
@@ -208,7 +216,7 @@ export default function Register() {
             <small>Minimum 12 characters.</small>
           </div>
 
-          <div className="register-field">
+          <div className="auth-field">
             <label htmlFor="confirmPassword">
               Confirm Password
             </label>
@@ -226,14 +234,14 @@ export default function Register() {
           </div>
 
           {error && (
-            <div className="register-error" role="alert">
+            <div className="auth-error" role="alert">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="register-button"
+            className="auth-button"
             disabled={submitting}
           >
             {submitting ? "Creating Account..." : "Create Account"}
@@ -241,19 +249,20 @@ export default function Register() {
 
         </form>
 
-        <div className="register-footer">
+        <div className="auth-footer">
           Already have an account?{" "}
           <Link to="/login">Sign in</Link>
         </div>
 
-        <div className="register-notice">
+        <div className="auth-notice">
           All new accounts require administrator approval.
+        </div>
         </div>
 
       </div>
 
-      <div className="register-copyright">
-        PRISM Laboratory | Prism Desk
+      <div className="auth-copyright">
+        PRISM Lab · PrismDesk
       </div>
 
     </div>

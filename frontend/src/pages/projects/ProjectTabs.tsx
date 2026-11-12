@@ -35,6 +35,7 @@ import {
   type Project,
   type ProjectMember,
 } from "../../services/projectService";
+import { ReadingStatusToggle } from "../../components/research/ReadingStatusToggle";
 import { linkPaper, listPapers, projectReadingProgress, unlinkPaper } from "../../services/researchService";
 import type { UserSummary } from "../../services/types";
 import { listTasks } from "../../services/taskService";
@@ -102,14 +103,14 @@ export function MembersTab({ project, onChanged }: { project: Project; onChanged
               }}
             />
           )}
-          <p className="mt-2 text-xs text-slate-500">Guests receive read-only access to this project only.</p>
+          <p className="mt-2 text-xs text-fg-muted">Guests receive read-only access to this project only.</p>
         </Card>
       )}
       <Card
         title="Members"
         actions={
           manage && (
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-fg-soft">
               <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} /> Show removed
             </label>
           )
@@ -123,7 +124,7 @@ export function MembersTab({ project, onChanged }: { project: Project; onChanged
             rows={members.data ?? []}
             rowKey={(row) => row.id}
             columns={[
-              { header: "Member", cell: (row) => <div><div className="font-medium">{row.user.full_name}</div><div className="text-xs text-slate-500">@{row.user.username}</div></div> },
+              { header: "Member", cell: (row) => <div><div className="font-medium">{row.user.full_name}</div><div className="text-xs text-fg-muted">@{row.user.username}</div></div> },
               { header: "Global roles", cell: (row) => row.user.roles.join(", ") },
               {
                 header: "Project role",
@@ -178,6 +179,8 @@ export function MembersTab({ project, onChanged }: { project: Project; onChanged
 export function PapersTab({ project }: { project: Project }) {
   const { notify } = useToast();
   const contribute = project.permissions.can_contribute;
+  const { user } = useAuth();
+  const tracks = can(user, "research.track_progress");
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
@@ -210,10 +213,10 @@ export function PapersTab({ project }: { project: Project }) {
         <Card title="Add literature" actions={<Button size="sm" onClick={() => setAdding(true)}>New paper</Button>}>
           <SearchInput label="Find existing paper" value={linkSearch} onChange={setLinkSearch} placeholder="Search the lab library to link an existing paper…" />
           {candidates.data && (
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
               {candidates.data.items.filter((p) => !linkedIds.includes(p.id)).map((paper) => (
                 <li key={paper.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span>{paper.title} <span className="text-xs text-slate-500">{paper.publication_year}</span></span>
+                  <span>{paper.title} <span className="text-xs text-fg-muted">{paper.publication_year}</span></span>
                   <Button size="sm" variant="secondary" onClick={() => void act(() => linkPaper(paper.id, project.id), "Paper linked.").then(() => setLinkSearch(""))}>
                     Link
                   </Button>
@@ -235,10 +238,28 @@ export function PapersTab({ project }: { project: Project }) {
                 rowKey={(row) => row.id}
                 empty="No papers linked to this project yet."
                 columns={[
-                  { header: "Title", cell: (row) => <Link className="font-medium hover:text-brand" to={`/research/papers/${row.id}`}>{row.title}</Link> },
+                  { header: "Title", cell: (row) => <Link className="font-medium hover:text-link" to={`/research/papers/${row.id}`}>{row.title}</Link> },
                   { header: "Authors", cell: (row) => <span className="text-xs">{row.authors.join(", ")}</span> },
                   { header: "Year", cell: (row) => row.publication_year ?? "—" },
-                  { header: "My status", cell: (row) => <StatusBadge status={row.my_status ?? "not_started"} /> },
+                  {
+                    header: "My status",
+                    cell: (row) =>
+                      tracks ? (
+                        <ReadingStatusToggle
+                          compact
+                          paperId={row.id}
+                          paperTitle={row.title}
+                          status={row.my_status}
+                          onChange={(next) => {
+                            const current = papers.data;
+                            if (current)
+                              papers.setData({ ...current, items: current.items.map((p) => (p.id === row.id ? { ...p, my_status: next } : p)) });
+                          }}
+                        />
+                      ) : (
+                        <StatusBadge status={row.my_status ?? "not_started"} />
+                      ),
+                  },
                   {
                     header: "",
                     cell: (row) =>
@@ -322,7 +343,7 @@ export function TasksTab({ project }: { project: Project }) {
               rowKey={(row) => row.id}
               empty="No tasks visible to you in this project."
               columns={[
-                { header: "Task", cell: (row) => <Link className="font-medium hover:text-brand" to={`/tasks/${row.id}`}>{row.title}</Link> },
+                { header: "Task", cell: (row) => <Link className="font-medium hover:text-link" to={`/tasks/${row.id}`}>{row.title}</Link> },
                 { header: "Priority", cell: (row) => <StatusBadge status={row.priority} /> },
                 { header: "Due", cell: (row) => formatDateTime(row.due_at) },
                 {
@@ -368,7 +389,7 @@ export function HandbookTab({ project }: { project: Project }) {
 
   return (
     <Card title="Project-wise daily entries" actions={canWrite && <Button onClick={() => setCreating(true)}>New entry</Button>}>
-      <p className="mb-3 text-xs text-slate-500">
+      <p className="mb-3 text-xs text-fg-muted">
         Students see their own entries; supervisors see every member's entries for this project.
       </p>
       <ErrorMessage message={entries.error} onRetry={entries.reload} />
@@ -382,7 +403,7 @@ export function HandbookTab({ project }: { project: Project }) {
               rowKey={(row) => row.id}
               empty="No entries yet."
               columns={[
-                { header: "Date", cell: (row) => <Link className="font-medium hover:text-brand" to={`/handbook/entries/${row.id}`}>{formatDate(row.entry_date)}</Link> },
+                { header: "Date", cell: (row) => <Link className="font-medium hover:text-link" to={`/handbook/entries/${row.id}`}>{formatDate(row.entry_date)}</Link> },
                 { header: "Student", cell: (row) => row.student.full_name },
                 { header: "Work completed", cell: (row) => <span className="line-clamp-2">{row.work_completed || "—"}</span> },
                 { header: "Comments", cell: (row) => row.comment_count },
@@ -423,7 +444,7 @@ export function ConferencesTab({ project }: { project: Project }) {
       title="Conference deadlines"
       actions={
         <>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
+          <label className="flex items-center gap-2 text-sm text-fg-soft">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Include archived
           </label>
           {project.permissions.can_contribute && can(user, "conferences.create") && <Button onClick={() => setAdding(true)}>Add conference</Button>}
@@ -462,7 +483,7 @@ export function AnalyticsTab({ project }: { project: Project }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Task completion" value={percent(a.completion_rate)} hint={`${a.assignments.counts.completed}/${a.assignments.total} assignments`} />
         <StatCard label="Pending reviews" value={a.assignments.counts.under_review} />
         <StatCard label="Overdue assignments" value={a.overdue_assignments} />
@@ -477,12 +498,12 @@ export function AnalyticsTab({ project }: { project: Project }) {
         </Card>
         <Card title="Handbook entries per week (8 weeks)">
           {a.handbook_per_week.length === 0 ? (
-            <p className="text-sm text-slate-500">No entries in the last 8 weeks.</p>
+            <p className="text-sm text-fg-muted">No entries in the last 8 weeks.</p>
           ) : (
             <ul className="space-y-2 text-xs">
               {a.handbook_per_week.map((w) => (
                 <li key={w.week_start} className="flex items-center gap-3">
-                  <span className="w-20 text-slate-500">{formatDate(w.week_start)}</span>
+                  <span className="w-20 text-fg-muted">{formatDate(w.week_start)}</span>
                   <span className="h-3 rounded bg-brand" style={{ width: `${(w.count / maxWeek) * 70}%` }} />
                   <span>{w.count}</span>
                 </li>

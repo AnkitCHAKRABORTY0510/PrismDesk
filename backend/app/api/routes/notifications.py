@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, page_params, require_capability
 from app.core.config import settings
-from app.core.errors import ConflictError, NotFoundError, ServiceError
+from app.core.errors import BadRequestError, ConflictError, NotFoundError, ServiceError
 from app.core.rate_limit import rate_limit
 from app.database.session import get_db
 from app.models.notification import Notification
@@ -75,6 +75,35 @@ def discord_callback(
     except ServiceError:
         return RedirectResponse(f"{target}?discord=error", status_code=303)
     return RedirectResponse(f"{target}?discord=linked", status_code=303)
+
+
+@router.post(
+    "/discord/test",
+    response_model=MessageResponse,
+    dependencies=[Depends(rate_limit("discord_test", "LOGIN_RATE_LIMIT"))],
+)
+def send_test_message(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Queue a test DM to the current user's linked Discord account."""
+
+    if discord_link_service.link_status(db, user) is None:
+        raise BadRequestError("Link your Discord account first.")
+    queued = enqueue_notification(
+        db,
+        recipient_id=user.id,
+        category="administrative",
+        event_type="discord.test",
+        title="Prism Desk test message",
+        body="If you can read this, Discord notifications from Prism Desk are working.",
+        dedupe_key=f"discord.test:{user.id}:{now_utc().isoformat()}",
+    )
+    if not queued:
+        raise BadRequestError("Turn on Administrative notifications to receive the test message.")
+    db.commit()
+    if not settings.discord_bot_configured:
+        return MessageResponse(
+            message="Test message queued, but the Discord bot token is not configured on the server yet."
+        )
+    return MessageResponse(message="Test message queued. It arrives as a Discord DM within a minute.")
 
 
 @router.delete("/discord", response_model=MessageResponse)

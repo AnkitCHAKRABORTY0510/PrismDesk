@@ -12,7 +12,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.session import Base
@@ -146,3 +146,31 @@ class NotificationDeliveryAttempt(Base):
     http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     attempted_at: Mapped[datetime] = created_at()
+
+
+class DiscordProjectChannel(Base):
+    """The private Discord channel the bot keeps for one project.
+
+    The notification worker creates it and keeps its member permission
+    overwrites in step with the project's active, Discord-linked members.
+    ``member_discord_ids`` and ``access_mode`` record what was last applied
+    in Discord, so the worker only calls Discord when something changed.
+    """
+
+    __tablename__ = "discord_project_channels"
+
+    __table_args__ = (
+        CheckConstraint("access_mode IN ('active', 'read_only')", name="ck_discord_project_channels_mode"),
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+    )
+    channel_id: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    channel_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    member_discord_ids: Mapped[list[str]] = mapped_column(
+        ARRAY(String(32)), nullable=False, default=list, server_default="{}"
+    )
+    access_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()

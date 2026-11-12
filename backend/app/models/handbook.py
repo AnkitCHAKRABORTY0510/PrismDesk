@@ -2,7 +2,10 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -124,6 +127,151 @@ class HandbookComment(Base):
     )
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("handbook_comments.id", ondelete="CASCADE"), nullable=True
+    )
+    author_id: Mapped[uuid.UUID | None] = user_fk(nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()
+
+    author: Mapped["User"] = relationship(foreign_keys=[author_id])  # noqa: F821
+
+
+# --- Personal planner: pins, to-dos and reminders --------------------------------
+# Owned by one user and visible only to them. Unlike entries and summaries
+# these may be dated in the future (they are for planning).
+
+PIN_CATEGORIES = ("deadline", "meeting", "milestone", "idea", "other")
+
+
+class HandbookPin(Base):
+    """A coloured marker on one calendar day."""
+
+    __tablename__ = "handbook_pins"
+
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('deadline', 'meeting', 'milestone', 'idea', 'other')",
+            name="ck_handbook_pins_category",
+        ),
+        Index("ix_handbook_pins_owner_date", "owner_id", "pin_date"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    pin_date: Mapped[date] = mapped_column(Date, nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="other", server_default="other")
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()
+
+
+class HandbookTodo(Base):
+    """A to-do item planned for one day; ``position`` orders a day's list."""
+
+    __tablename__ = "handbook_todos"
+
+    __table_args__ = (Index("ix_handbook_todos_owner_date", "owner_id", "todo_date"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    todo_date: Mapped[date] = mapped_column(Date, nullable=False)
+    text: Mapped[str] = mapped_column(String(500), nullable=False)
+    done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()
+
+
+class HandbookReminder(Base):
+    """A timed reminder. ``reminder_date`` is the user's local calendar day."""
+
+    __tablename__ = "handbook_reminders"
+
+    __table_args__ = (
+        Index("ix_handbook_reminders_owner_date", "owner_id", "reminder_date"),
+        Index("ix_handbook_reminders_owner_remind_at", "owner_id", "remind_at"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    reminder_date: Mapped[date] = mapped_column(Date, nullable=False)
+    remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    note: Mapped[str] = mapped_column(String(500), nullable=False)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()
+
+
+# --- Shared notes: the part of a student's day written for supervisors -------------
+
+
+class HandbookSharedNote(Base):
+    """A student's note for one day that their supervisors can read and comment on.
+
+    Kept apart from ``DailySummary`` so the private journal can never leak
+    through a shared-note query.
+    """
+
+    __tablename__ = "handbook_shared_notes"
+
+    __table_args__ = (
+        UniqueConstraint("student_id", "entry_date", name="uq_handbook_shared_notes_student_date"),
+        Index("ix_handbook_shared_notes_date", "entry_date"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    entry_date: Mapped[date] = mapped_column(Date, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = updated_at()
+
+    student: Mapped["User"] = relationship(foreign_keys=[student_id])  # noqa: F821
+
+
+class HandbookSharedNoteVersion(Base):
+    __tablename__ = "handbook_shared_note_versions"
+
+    __table_args__ = (
+        UniqueConstraint("note_id", "version", name="uq_handbook_shared_note_versions_note_version"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    note_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("handbook_shared_notes.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    edited_at: Mapped[datetime] = created_at()
+
+
+class HandbookSharedNoteComment(Base):
+    """Supervisor comment on a shared note; replies point at a top-level comment."""
+
+    __tablename__ = "handbook_shared_note_comments"
+
+    __table_args__ = (
+        Index("ix_handbook_shared_note_comments_note_id", "note_id"),
+        Index("ix_handbook_shared_note_comments_parent_id", "parent_id"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    note_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("handbook_shared_notes.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("handbook_shared_note_comments.id", ondelete="CASCADE"), nullable=True
     )
     author_id: Mapped[uuid.UUID | None] = user_fk(nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)

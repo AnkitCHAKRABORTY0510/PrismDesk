@@ -1,9 +1,9 @@
 """Role dashboards built from SQL aggregates (no table scans in Python)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import Select, and_, func, literal, select
+from sqlalchemy import Select, and_, case, func, literal, select, union
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
@@ -11,6 +11,7 @@ from app.models.conference import Conference, ProjectConference
 from app.models.handbook import HandbookComment, HandbookEntry
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
+from app.models.project_link import ProjectRepoLink
 from app.models.research import PaperReadingProgress, ProjectPaper, ResearchPaper
 from app.models.task import Task, TaskAssignment
 from app.models.user import User
@@ -18,12 +19,17 @@ from app.schemas.dashboard import (
     ActivityItem,
     AdminDashboard,
     CountMap,
+    DayCount,
     DeadlineItem,
     GuestDashboard,
     HandbookItem,
+    MemberChip,
+    MemberReading,
     ProfessorDashboard,
     ProjectAnalytics,
     ProjectSummaryItem,
+    ReadingListItem,
+    RepoLinkChip,
     ReviewItem,
     StudentDashboard,
     WeeklyCount,
@@ -107,6 +113,56 @@ def _project_summaries(db: Session, user: User, project_ids: Select) -> list[Pro
         .limit(50)
     ).all()
 
+    ids = [row[0] for row in rows]
+    pipelines: dict[UUID, dict[str, int]] = {}
+    members: dict[UUID, list[MemberChip]] = {}
+    links: dict[UUID, list[RepoLinkChip]] = {}
+    if ids:
+        for project_id, status, count in db.execute(
+            select(Task.project_id, TaskAssignment.status, func.count())
+            .join(TaskAssignment, TaskAssignment.task_id == Task.id)
+            .where(Task.project_id.in_(ids), Task.task_type == "official")
+            .group_by(Task.project_id, TaskAssignment.status)
+        ).all():
+            pipelines.setdefault(project_id, {key: 0 for key in ASSIGNMENT_STATUSES})[status] = count
+
+        role_order = case(
+            (ProjectMember.membership_role == "owner", 0),
+            (ProjectMember.membership_role == "supervisor", 1),
+            (ProjectMember.membership_role == "member", 2),
+            else_=3,
+        )
+        ranked = (
+            select(
+                ProjectMember.project_id,
+                ProjectMember.user_id,
+                ProjectMember.membership_role,
+                func.row_number()
+                .over(partition_by=ProjectMember.project_id, order_by=(role_order, ProjectMember.joined_at))
+                .label("rank"),
+            )
+            .where(ProjectMember.project_id.in_(ids), ProjectMember.membership_status == "active")
+            .subquery()
+        )
+        for project_id, user_id, username, full_name, role in db.execute(
+            select(ranked.c.project_id, User.id, User.username, User.full_name, ranked.c.membership_role)
+            .join(User, User.id == ranked.c.user_id)
+            .where(ranked.c.rank <= 5)
+            .order_by(ranked.c.project_id, ranked.c.rank)
+        ).all():
+            members.setdefault(project_id, []).append(
+                MemberChip(user_id=user_id, username=username, full_name=full_name, membership_role=role)
+            )
+
+        for project_id, url, label in db.execute(
+            select(ProjectRepoLink.project_id, ProjectRepoLink.url, ProjectRepoLink.label)
+            .where(ProjectRepoLink.project_id.in_(ids))
+            .order_by(ProjectRepoLink.created_at)
+        ).all():
+            bucket = links.setdefault(project_id, [])
+            if len(bucket) < 3:
+                bucket.append(RepoLinkChip(url=url, label=label))
+
     return [
         ProjectSummaryItem(
             id=row[0],
@@ -118,6 +174,9 @@ def _project_summaries(db: Session, user: User, project_ids: Select) -> list[Pro
             assignments_completed=row[6],
             pending_reviews=row[7],
             overdue=row[8],
+            assignment_counts=pipelines.get(row[0], {key: 0 for key in ASSIGNMENT_STATUSES}),
+            members=members.get(row[0], []),
+            repo_links=links.get(row[0], []),
         )
         for row in rows
     ]
@@ -156,6 +215,7 @@ def _upcoming_tasks(db: Session, condition, limit: int = 5) -> list[DeadlineItem
         .outerjoin(Project, Project.id == Task.project_id)
         .where(
             open_assignment,
+            Task.task_type != "reminder",
             Task.due_at.is_not(None),
             Task.due_at >= func.now(),
             (Task.project_id.is_(None)) | (Project.status == "active"),
@@ -197,10 +257,149 @@ def _handbook_items(db: Session, condition, limit: int = 10) -> list[HandbookIte
     ]
 
 
+def _effective_status(user_id: UUID | None = None):
+    """One reading status per (user, paper): the library-wide row wins,
+    otherwise the most recently updated project-scoped row."""
+
+    statement = (
+        select(PaperReadingProgress.user_id, PaperReadingProgress.paper_id, PaperReadingProgress.status)
+        .distinct(PaperReadingProgress.user_id, PaperReadingProgress.paper_id)
+        .order_by(
+            PaperReadingProgress.user_id,
+            PaperReadingProgress.paper_id,
+            PaperReadingProgress.project_id.is_(None).desc(),
+            PaperReadingProgress.updated_at.desc(),
+        )
+    )
+    if user_id is not None:
+        statement = statement.where(PaperReadingProgress.user_id == user_id)
+    return statement.subquery()
+
+
+def _my_reading(db: Session, user: User, project_ids: Select, limit: int = 8) -> tuple[CountMap, list[ReadingListItem]]:
+    """The user's own reading status over papers linked to their projects
+    plus any paper they have set a status on. Untouched papers are "to read"."""
+
+    candidates = union(
+        select(ProjectPaper.paper_id).where(ProjectPaper.project_id.in_(project_ids)),
+        select(PaperReadingProgress.paper_id).where(PaperReadingProgress.user_id == user.id),
+    ).subquery()
+    effective = _effective_status(user.id)
+    status = func.coalesce(effective.c.status, "not_started")
+
+    counts = _count_map(
+        db.execute(
+            select(status, func.count())
+            .select_from(ResearchPaper)
+            .outerjoin(effective, effective.c.paper_id == ResearchPaper.id)
+            .where(ResearchPaper.id.in_(select(candidates.c.paper_id)))
+            .group_by(status)
+        ).all(),
+        READING_STATUSES,
+    )
+
+    order = case((status == "reading", 0), (status == "not_started", 1), else_=2)
+    rows = db.execute(
+        select(ResearchPaper.id, ResearchPaper.title, ResearchPaper.venue, ResearchPaper.publication_year, status)
+        .outerjoin(effective, effective.c.paper_id == ResearchPaper.id)
+        .where(ResearchPaper.id.in_(select(candidates.c.paper_id)))
+        .order_by(order, ResearchPaper.created_at.desc())
+        .limit(limit)
+    ).all()
+    return counts, [
+        ReadingListItem(paper_id=r[0], title=r[1], venue=r[2], publication_year=r[3], status=r[4]) for r in rows
+    ]
+
+
+def _member_reading(db: Session, user: User, supervised: Select, limit: int = 20) -> list[MemberReading]:
+    """Per-member reading status over the papers of the projects they belong to."""
+
+    member_papers = (
+        select(ProjectMember.user_id, ProjectPaper.paper_id)
+        .join(ProjectPaper, ProjectPaper.project_id == ProjectMember.project_id)
+        .where(
+            ProjectMember.project_id.in_(supervised),
+            ProjectMember.membership_status == "active",
+            ProjectMember.membership_role.in_(("owner", "member")),
+            ProjectMember.user_id != user.id,
+        )
+        .distinct()
+        .subquery()
+    )
+    effective = _effective_status()
+    status = func.coalesce(effective.c.status, "not_started")
+    rows = db.execute(
+        select(User.id, User.username, User.full_name, status, func.count())
+        .select_from(member_papers)
+        .join(User, User.id == member_papers.c.user_id)
+        .outerjoin(
+            effective,
+            and_(effective.c.user_id == member_papers.c.user_id, effective.c.paper_id == member_papers.c.paper_id),
+        )
+        .group_by(User.id, User.username, User.full_name, status)
+        .order_by(User.username)
+    ).all()
+
+    grid: dict[UUID, MemberReading] = {}
+    for user_id, username, full_name, state, count in rows:
+        item = grid.setdefault(
+            user_id,
+            MemberReading(
+                user_id=user_id,
+                username=username,
+                full_name=full_name,
+                counts={key: 0 for key in READING_STATUSES},
+                total=0,
+            ),
+        )
+        item.counts[state] = count
+        item.total += count
+    return list(grid.values())[:limit]
+
+
+def _handbook_days(db: Session, user: User, days: int = 84) -> tuple[list[DayCount], int]:
+    # Handbook entry dates are the lab's local calendar days (the handbook
+    # module also uses the server's local date).
+    today = date.today()
+    rows = db.execute(
+        select(HandbookEntry.entry_date, func.count())
+        .where(HandbookEntry.student_id == user.id, HandbookEntry.entry_date > today - timedelta(days=days))
+        .group_by(HandbookEntry.entry_date)
+        .order_by(HandbookEntry.entry_date)
+    ).all()
+    active = {day for day, _ in rows}
+
+    # Streak of consecutive days with an entry, ending today (or yesterday
+    # when today has no entry yet, so the streak doesn't reset at midnight).
+    streak = 0
+    cursor = today if today in active else today - timedelta(days=1)
+    while cursor in active:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return [DayCount(day=day, count=count) for day, count in rows], streak
+
+
+def _open_reminders(db: Session, user: User) -> int:
+    """Reminders sent to the user that they have not ticked off yet."""
+
+    return db.scalar(
+        select(func.count())
+        .select_from(TaskAssignment)
+        .join(Task, Task.id == TaskAssignment.task_id)
+        .join(Project, Project.id == Task.project_id)
+        .where(
+            Task.task_type == "reminder",
+            TaskAssignment.assignee_id == user.id,
+            TaskAssignment.status != "completed",
+            Project.status == "active",
+        )
+    ) or 0
+
+
 # --- Role dashboards -------------------------------------------------------------------
 
 
-def admin_dashboard(db: Session) -> AdminDashboard:
+def admin_dashboard(db: Session, user: User | None = None) -> AdminDashboard:
     users = db.execute(select(User.account_status, func.count()).group_by(User.account_status)).all()
     projects = db.execute(select(Project.status, func.count()).group_by(Project.status)).all()
     tasks = db.execute(
@@ -224,7 +423,14 @@ def admin_dashboard(db: Session) -> AdminDashboard:
         .limit(10)
     ).all()
 
+    if user is not None:
+        my_reading, reading_list = _my_reading(db, user, _member_projects(user.id, ("owner", "supervisor", "member")))
+    else:
+        my_reading, reading_list = _count_map([], READING_STATUSES), []
+
     return AdminDashboard(
+        my_reading=my_reading,
+        reading_list=reading_list,
         users=_count_map(users, ("pending", "approved", "rejected", "suspended")),
         projects=_count_map(projects, ("active", "archived", "deleted")),
         research_papers=db.scalar(select(func.count()).select_from(ResearchPaper)) or 0,
@@ -285,10 +491,12 @@ def professor_dashboard(db: Session, user: User) -> ProfessorDashboard:
                 select(ProjectMember.user_id).where(
                     ProjectMember.project_id.in_(supervised), ProjectMember.membership_status == "active"
                 )
-            )
+            ),
+            PaperReadingProgress.user_id != user.id,
         )
         .group_by(PaperReadingProgress.status)
     ).all()
+    my_reading, reading_list = _my_reading(db, user, supervised)
 
     deadlines = _upcoming_tasks(db, Task.project_id.in_(supervised)) + _upcoming_conferences(db, supervised)
     deadlines.sort(key=lambda item: item.due_at)
@@ -306,6 +514,10 @@ def professor_dashboard(db: Session, user: User) -> ProfessorDashboard:
         recent_handbook_entries=_handbook_items(db, HandbookEntry.project_id.in_(supervised)),
         upcoming_deadlines=deadlines[:10],
         reading_progress=_count_map(reading, READING_STATUSES),
+        my_reading=my_reading,
+        reading_list=reading_list,
+        member_reading=_member_reading(db, user, supervised),
+        open_reminders=_open_reminders(db, user),
     )
 
 
@@ -333,31 +545,10 @@ def student_dashboard(db: Session, user: User) -> StudentDashboard:
     pending = sum(assigned.counts[s] for s in ("todo", "in_progress", "revision_required"))
     completion = assigned.counts["completed"] / assigned.total if assigned.total else 0.0
 
-    # Reading progress over papers linked to my projects; untouched papers
-    # count as not started.
-    project_papers = select(func.distinct(ProjectPaper.paper_id)).where(ProjectPaper.project_id.in_(joined))
-    paper_total = db.scalar(select(func.count()).select_from(project_papers.subquery())) or 0
-    statuses = dict(
-        db.execute(
-            select(PaperReadingProgress.status, func.count(func.distinct(PaperReadingProgress.paper_id)))
-            .where(
-                PaperReadingProgress.user_id == user.id,
-                PaperReadingProgress.paper_id.in_(project_papers),
-                PaperReadingProgress.status != "not_started",
-            )
-            .group_by(PaperReadingProgress.status)
-        ).all()
-    )
-    reading_count = statuses.get("reading", 0)
-    completed_count = statuses.get("completed", 0)
-    reading = CountMap(
-        counts={
-            "not_started": max(paper_total - reading_count - completed_count, 0),
-            "reading": reading_count,
-            "completed": completed_count,
-        },
-        total=paper_total,
-    )
+    # My reading status over papers linked to my projects (and any paper I
+    # track); untouched papers count as "to read".
+    reading, reading_list = _my_reading(db, user, joined)
+    handbook_days, streak = _handbook_days(db, user)
 
     today = _now().date()
     entries_since = lambda days: db.scalar(  # noqa: E731
@@ -381,6 +572,10 @@ def student_dashboard(db: Session, user: User) -> StudentDashboard:
         handbook_entries_last_30_days=entries_since(30),
         recent_handbook_entries=_handbook_items(db, HandbookEntry.student_id == user.id, limit=5),
         upcoming_deadlines=deadlines[:10],
+        reading_list=reading_list,
+        handbook_days=handbook_days,
+        handbook_streak=streak,
+        open_reminders=_open_reminders(db, user),
     )
 
 

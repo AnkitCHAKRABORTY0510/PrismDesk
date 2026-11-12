@@ -123,17 +123,26 @@ class PaperResponse(BaseModel):
 
 
 class DoiLookupResponse(BaseModel):
-    """Metadata suggested for a DOI. Nothing is stored until the user saves."""
+    """Metadata suggested for a DOI, arXiv ID, link or title.
+
+    Nothing is stored until the user saves the paper form.
+    """
 
     title: str | None = None
     authors: list[str] = []
     abstract: str = ""
     publication_year: int | None = None
     venue: str | None = None
-    doi: str
+    doi: str | None = None
     url: str | None = None
     keywords: list[str] = []
     existing_paper_id: UUID | None = None
+    matched_by: Literal["doi", "arxiv", "url", "title"] | None = Field(
+        default=None, description="What the query was recognised as."
+    )
+    source: str | None = Field(
+        default=None, description="Where the metadata came from, e.g. crossref, arxiv, webpage+crossref."
+    )
 
 
 class ProjectLinkRequest(BaseModel):

@@ -30,6 +30,18 @@ class ActivityItem(BaseModel):
     created_at: datetime
 
 
+class MemberChip(BaseModel):
+    user_id: UUID
+    username: str
+    full_name: str
+    membership_role: str
+
+
+class RepoLinkChip(BaseModel):
+    url: str
+    label: str | None = None
+
+
 class ProjectSummaryItem(BaseModel):
     id: UUID
     title: str
@@ -40,6 +52,11 @@ class ProjectSummaryItem(BaseModel):
     assignments_completed: int = 0
     pending_reviews: int = 0
     overdue: int = 0
+    # Official assignment counts by status (per-project pipeline).
+    assignment_counts: dict[str, int] = {}
+    # First few active members, for avatar stacks.
+    members: list[MemberChip] = []
+    repo_links: list[RepoLinkChip] = []
 
     @property
     def completion_rate(self) -> float:
@@ -64,6 +81,27 @@ class ReviewItem(BaseModel):
     submitted_at: datetime | None
 
 
+class ReadingListItem(BaseModel):
+    paper_id: UUID
+    title: str
+    venue: str | None = None
+    publication_year: int | None = None
+    status: str  # not_started | reading | completed
+
+
+class MemberReading(BaseModel):
+    user_id: UUID
+    username: str
+    full_name: str
+    counts: dict[str, int]
+    total: int
+
+
+class DayCount(BaseModel):
+    day: date
+    count: int
+
+
 class AdminDashboard(BaseModel):
     users: CountMap
     projects: CountMap
@@ -73,6 +111,8 @@ class AdminDashboard(BaseModel):
     notifications: CountMap
     upcoming_conferences: list[DeadlineItem]
     recent_activity: list[ActivityItem]
+    my_reading: CountMap = CountMap(counts={}, total=0)
+    reading_list: list[ReadingListItem] = []
 
 
 class ProfessorDashboard(BaseModel):
@@ -83,6 +123,10 @@ class ProfessorDashboard(BaseModel):
     recent_handbook_entries: list[HandbookItem]
     upcoming_deadlines: list[DeadlineItem]
     reading_progress: CountMap
+    my_reading: CountMap = CountMap(counts={}, total=0)
+    reading_list: list[ReadingListItem] = []
+    member_reading: list[MemberReading] = []
+    open_reminders: int = 0
 
 
 class StudentDashboard(BaseModel):
@@ -97,6 +141,11 @@ class StudentDashboard(BaseModel):
     handbook_entries_last_30_days: int
     recent_handbook_entries: list[HandbookItem]
     upcoming_deadlines: list[DeadlineItem]
+    reading_list: list[ReadingListItem] = []
+    # Handbook entries per day for the activity heatmap (last 12 weeks).
+    handbook_days: list[DayCount] = []
+    handbook_streak: int = 0
+    open_reminders: int = 0
 
 
 class GuestDashboard(BaseModel):

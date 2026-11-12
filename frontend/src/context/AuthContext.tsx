@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { onUnauthorized, setCsrfToken } from "../services/api";
+import { onSessionChanged, onUnauthorized, setCsrfToken } from "../services/api";
 import {
   getCurrentUser,
   loginUser,
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Keep the in-memory CSRF token in sync with the signed-in user.
   const setUser = useCallback((next: User | null) => {
-    setCsrfToken(next?.csrf_token ?? null);
+    setCsrfToken(next?.csrf_token ?? null, next?.id ?? null);
     setUserState(next);
   }, []);
 
@@ -51,6 +51,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     onUnauthorized(() => setUser(null));
     return () => onUnauthorized(null);
+  }, [setUser]);
+
+  // Another account signed in from this browser (another tab): load it
+  // so the page stops acting for the previous user.
+  useEffect(() => {
+    onSessionChanged(() => {
+      getCurrentUser()
+        .then(setUser)
+        .catch(() => setUser(null));
+    });
+    return () => onSessionChanged(null);
   }, [setUser]);
 
   const login = useCallback(

@@ -57,7 +57,7 @@ export default function PendingRegistrations({ onChange }: { onChange?: () => vo
               cell: (row) => (
                 <div>
                   <div className="font-medium">{row.full_name}</div>
-                  <div className="text-xs text-slate-500">@{row.username}</div>
+                  <div className="text-xs text-fg-muted">@{row.username}</div>
                 </div>
               ),
             },

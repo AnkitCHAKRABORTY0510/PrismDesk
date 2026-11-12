@@ -1,5 +1,8 @@
 # Prism Desk — Deployment Guide (Ubuntu lab workstation)
 
+> Moving to the campus workstation? Follow the step-by-step checklist in
+> [DEPLOY_WORKSTATION.md](DEPLOY_WORKSTATION.md); this file is the reference.
+
 Target: one Ubuntu workstation running PostgreSQL, the FastAPI backend, the Discord notification
 worker and Nginx. Lab users reach the app over the LAN through Nginx; PostgreSQL stays local.
 
@@ -71,6 +74,8 @@ venv/bin/python -m scripts.create_admin
 | `TASK_REMINDER_HOURS`, `CONFERENCE_REMINDER_DAYS` | 24, 7 | reminder windows |
 
 ## 4. Discord setup (optional)
+Beginner walkthrough, exact permissions and troubleshooting: [discord-setup.md](discord-setup.md).
+
 1. Create an application at the Discord Developer Portal. Under OAuth2 add the redirect
    `https://<host>/api/v1/notifications/discord/callback`; copy the client ID and secret to `.env`.
 2. Add a Bot, copy its token to `DISCORD_BOT_TOKEN`, and invite it to the lab server with the `bot`

@@ -27,6 +27,7 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "projects.view_all",
         "research.view",
         "research.create",
+        "research.track_progress",
         "tasks.view",
         "tasks.create_official",
         "tasks.review",
@@ -34,6 +35,8 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "handbook.review",
         "conferences.view",
         "conferences.create",
+        "journals.view",
+        "journals.create",
         "dashboard.admin",
     },
     PROFESSOR: {
@@ -41,6 +44,7 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "projects.create",
         "research.view",
         "research.create",
+        "research.track_progress",
         "tasks.view",
         "tasks.create_official",
         "tasks.review",
@@ -48,6 +52,8 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "handbook.review",
         "conferences.view",
         "conferences.create",
+        "journals.view",
+        "journals.create",
         "dashboard.professor",
     },
     STUDENT: {
@@ -62,6 +68,8 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "handbook.write",
         "conferences.view",
         "conferences.create",
+        "journals.view",
+        "journals.create",
         "dashboard.student",
     },
     GUEST: {

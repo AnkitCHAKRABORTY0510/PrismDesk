@@ -22,25 +22,25 @@ export function DataTable<T>({
   onRowClick?: (row: T) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50">
+    <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-line bg-surface">
+      <table className="min-w-full divide-y divide-line text-sm">
+        <thead className="bg-surface-muted">
           <tr>
             {columns.map((column) => (
               <th
                 key={column.header}
                 scope="col"
-                className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                className="whitespace-nowrap px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-fg-muted"
               >
                 {column.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 bg-white">
+        <tbody className="divide-y divide-line bg-surface">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={columns.length} className="px-4 py-10 text-center text-fg-muted">
                 {empty}
               </td>
             </tr>
@@ -49,10 +49,10 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={onRowClick ? "cursor-pointer hover:bg-slate-50" : undefined}
+                className={onRowClick ? "cursor-pointer transition-colors hover:bg-surface-muted" : "transition-colors hover:bg-surface-muted/50"}
               >
                 {columns.map((column) => (
-                  <td key={column.header} className={`px-4 py-3 align-top text-slate-700 ${column.className ?? ""}`}>
+                  <td key={column.header} className={`px-4 py-3 align-top text-fg-soft ${column.className ?? ""}`}>
                     {column.cell(row)}
                   </td>
                 ))}
@@ -79,7 +79,7 @@ export function Pagination({
   const pages = Math.max(1, Math.ceil(total / pageSize));
   if (total === 0) return null;
   return (
-    <nav aria-label="Pagination" className="mt-3 flex items-center justify-between text-sm text-slate-600">
+    <nav aria-label="Pagination" className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-fg-muted">
       <span>
         {total} result{total === 1 ? "" : "s"} · page {page} of {pages}
       </span>

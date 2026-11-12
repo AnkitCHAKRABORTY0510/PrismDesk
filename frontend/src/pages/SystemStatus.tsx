@@ -28,24 +28,24 @@ function SystemStatus() {
 
   const statusStyle = (status: string) =>
     status === "healthy" || status === "connected"
-      ? "text-green-600"
-      : "text-yellow-600";
+      ? "text-success-fg"
+      : "text-warn-fg";
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-xl bg-white p-8 shadow-lg">
-        <h1 className="text-2xl font-bold text-slate-800">
+    <div className="min-h-screen bg-surface-muted flex items-center justify-center p-6">
+      <div className="w-full max-w-lg rounded-xl bg-surface p-8 shadow-pop">
+        <h1 className="text-2xl font-bold text-fg">
           Prism Desk
         </h1>
 
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-fg-muted">
           System Connection Status
         </p>
 
         <div className="mt-8 space-y-5">
           <div className="flex justify-between border-b pb-4">
             <span className="font-medium">React Frontend</span>
-            <span className="font-semibold text-green-600">
+            <span className="font-semibold text-success-fg">
               Running
             </span>
           </div>
@@ -66,12 +66,12 @@ function SystemStatus() {
         </div>
 
         {error && (
-          <p className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+          <p className="mt-6 rounded-lg bg-danger-soft p-3 text-sm text-danger-fg">
             {error}
           </p>
         )}
 
-        <p className="mt-8 text-center text-xs text-slate-400">
+        <p className="mt-8 text-center text-xs text-fg-subtle">
           PRISM Laboratory | Prism Desk
         </p>
       </div>

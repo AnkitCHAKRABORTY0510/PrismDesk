@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,6 +13,7 @@ from app.core.logging import configure_logging
 from app.database.session import engine
 
 configure_logging()
+logger = logging.getLogger("prism_desk")
 
 app = FastAPI(
     title="Prism Desk API",
@@ -41,6 +44,21 @@ app = FastAPI(
     redoc_url="/redoc" if settings.API_DOCS_ENABLED else None,
     openapi_url="/openapi.json" if settings.API_DOCS_ENABLED else None,
 )
+
+# Registered before CORSMiddleware so it runs *inside* it: unexpected errors
+# become a JSON 500 that still carries CORS headers, so the browser shows a
+# real error instead of a network failure ("Cannot reach the server").
+@app.middleware("http")
+async def unexpected_error_as_json(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "The server hit an unexpected error. Details are in the backend log."},
+        )
+
 
 app.add_middleware(
     CORSMiddleware,

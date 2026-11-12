@@ -138,7 +138,7 @@ export default function UserManagement() {
                     cell: (row) => (
                       <div>
                         <div className="font-medium">{row.full_name}</div>
-                        <div className="text-xs text-slate-500">@{row.username}</div>
+                        <div className="text-xs text-fg-muted">@{row.username}</div>
                       </div>
                     ),
                   },
@@ -155,7 +155,7 @@ export default function UserManagement() {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-slate-400">No role</span>
+                        <span className="text-fg-subtle">No role</span>
                       ),
                   },
                   { header: "Status", cell: (row) => <StatusBadge status={row.account_status} /> },
@@ -207,11 +207,11 @@ export default function UserManagement() {
       />
 
       <Modal open={rolesFor !== null} title={`Roles for @${rolesFor?.username ?? ""}`} onClose={() => setRolesFor(null)}>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-fg-muted">
           A user keeps at least one role. You cannot remove your own Administrator role, and the last active
           administrator is protected.
         </p>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-line">
           {ROLES.map((roleName) => {
             const has = rolesFor?.roles.includes(roleName) ?? false;
             return (

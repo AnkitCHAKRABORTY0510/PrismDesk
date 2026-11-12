@@ -23,17 +23,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const tone = {
-    success: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    error: "border-red-200 bg-red-50 text-red-800",
-    info: "border-blue-200 bg-blue-50 text-blue-800",
+    success: "border-success-line text-success-fg",
+    error: "border-danger-line text-danger-fg",
+    info: "border-info-line text-info-fg",
   };
 
   return (
     <ToastContext.Provider value={{ notify }}>
       {children}
-      <div aria-live="polite" className="fixed bottom-4 right-4 z-[60] flex w-80 flex-col gap-2">
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col gap-2 sm:inset-x-auto sm:right-4 sm:w-80">
         {toasts.map((toast) => (
-          <div key={toast.id} role="status" className={`rounded-lg border px-4 py-3 text-sm shadow ${tone[toast.kind]}`}>
+          <div key={toast.id} role="status" className={`pointer-events-auto rounded-lg border bg-surface-raised px-4 py-3 text-sm shadow-pop animate-in fade-in-0 slide-in-from-bottom-2 ${tone[toast.kind]}`}>
             {toast.message}
           </div>
         ))}

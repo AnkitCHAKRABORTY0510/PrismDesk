@@ -5,7 +5,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
-from app.core.permissions import STUDENT, has_capability
+from app.core.permissions import PROFESSOR, STUDENT, has_capability
 from app.models.project import Project, ProjectMember
 from app.models.task import Task, TaskAssignment, TaskReview, TaskSubmission
 from app.models.user import User
@@ -44,6 +44,15 @@ PERSONAL_TRANSITIONS = {
     "todo": {"in_progress", "completed"},
     "in_progress": {"todo", "completed"},
     "completed": {"in_progress"},
+    "under_review": set(),
+    "revision_required": set(),
+}
+
+# Recipients tick a reminder off (or reopen it).
+REMINDER_TRANSITIONS = {
+    "todo": {"completed"},
+    "completed": {"todo"},
+    "in_progress": {"completed"},
     "under_review": set(),
     "revision_required": set(),
 }
@@ -100,12 +109,16 @@ class TaskContext:
     def can_manage(self) -> bool:
         if self.task.task_type == "personal":
             return self.is_personal_owner
+        if self.task.task_type == "reminder":
+            return self.task.created_by == self.user.id
         return bool(self.project_access and self.project_access.is_manager)
 
     @property
     def can_modify(self) -> bool:
         if self.task.task_type == "personal":
             return self.is_personal_owner
+        if self.task.task_type == "reminder":
+            return self.task.created_by == self.user.id and bool(self.project_access and self.project_access.is_active)
         return bool(self.project_access and self.project_access.is_manager and self.project_access.is_active)
 
 
@@ -119,6 +132,19 @@ def _load_context(db: Session, user: User, task_id: UUID) -> TaskContext:
         if task.created_by != user.id:
             raise NotFoundError("Task not found.")
         return TaskContext(task, user, None)
+
+    if task.task_type == "reminder":
+        # Reminders are private to their sender and recipients.
+        is_party = task.created_by == user.id or db.scalar(
+            select(TaskAssignment.id).where(TaskAssignment.task_id == task.id, TaskAssignment.assignee_id == user.id)
+        )
+        if not is_party:
+            raise NotFoundError("Task not found.")
+        try:
+            access = get_project_access(db, user, task.project_id)
+        except NotFoundError:
+            raise NotFoundError("Task not found.")
+        return TaskContext(task, user, access)
 
     try:
         access = get_project_access(db, user, task.project_id)
@@ -182,6 +208,7 @@ def _assign(db: Session, actor: User, task: Task, assignees: list[User]) -> list
         db.scalars(select(TaskAssignment.assignee_id).where(TaskAssignment.task_id == task.id)).all()
     )
     created = []
+    project = db.get(Project, task.project_id) if task.project_id else None
     for assignee in assignees:
         if assignee.id in existing:
             continue
@@ -194,7 +221,9 @@ def _assign(db: Session, actor: User, task: Task, assignees: list[User]) -> list
             category="tasks",
             event_type="task.assigned",
             title="New task assigned",
-            body=f"You were assigned “{task.title}”."
+            body=f"{actor.full_name} assigned you “{task.title}”"
+            + (f" in {project.title}" if project else "")
+            + "."
             + (f" Due {task.due_at:%Y-%m-%d %H:%M UTC}." if task.due_at else ""),
             entity_type="task",
             entity_id=task.id,
@@ -208,10 +237,136 @@ def _assign(db: Session, actor: User, task: Task, assignees: list[User]) -> list
     return created
 
 
+# --- Reminders ------------------------------------------------------------------------
+# Professors/administrators who manage a project can remind any active
+# member. Students can only remind the project's professors, and only
+# about an official task assigned to them. Recipients get a private
+# Discord DM (subject to their notification settings).
+
+
+def _reminder_scope(
+    db: Session, user: User, project_id: UUID | None, related_task_id: UUID | None
+) -> tuple[ProjectAccess, Task | None, str]:
+    related = None
+    if related_task_id is not None:
+        related = db.get(Task, related_task_id)
+        if not related or related.task_type != "official":
+            raise NotFoundError("Task not found.")
+        if project_id is not None and project_id != related.project_id:
+            raise BadRequestError("That task belongs to a different project.")
+        project_id = related.project_id
+    if project_id is None:
+        raise BadRequestError("A reminder needs a project or a related task.")
+
+    access = get_project_access(db, user, project_id)
+    require(access.is_active, "The project is archived; reminders cannot be sent.")
+
+    if access.is_manager:
+        return access, related, "manager"
+
+    if STUDENT in user.role_names and access.role in ("owner", "member"):
+        if related is None:
+            raise BadRequestError("Students send reminders about a particular task.")
+        assigned = db.scalar(
+            select(TaskAssignment.id).where(
+                TaskAssignment.task_id == related.id, TaskAssignment.assignee_id == user.id
+            )
+        )
+        require(bool(assigned), "You can only send reminders about tasks assigned to you.")
+        return access, related, "student"
+
+    raise ForbiddenError("You cannot send reminders in this project.")
+
+
+def _eligible_recipients(db: Session, user: User, project_id: UUID, mode: str) -> list[tuple[User, str]]:
+    roles = ("owner", "supervisor") if mode == "student" else ("owner", "supervisor", "member")
+    rows = db.execute(
+        select(User, ProjectMember.membership_role)
+        .join(ProjectMember, ProjectMember.user_id == User.id)
+        .where(
+            ProjectMember.project_id == project_id,
+            ProjectMember.membership_status == "active",
+            ProjectMember.membership_role.in_(roles),
+            User.id != user.id,
+            User.account_status == "approved",
+        )
+        .order_by(User.full_name)
+    ).all()
+    if mode == "student":
+        rows = [(member, role) for member, role in rows if PROFESSOR in member.role_names]
+    return [(member, role) for member, role in rows]
+
+
+def reminder_recipients(
+    db: Session, user: User, project_id: UUID | None, related_task_id: UUID | None
+) -> list[tuple[User, str]]:
+    access, _, mode = _reminder_scope(db, user, project_id, related_task_id)
+    return _eligible_recipients(db, user, access.project.id, mode)
+
+
+def _create_reminder(db: Session, user: User, data: TaskCreate) -> Task:
+    access, related, mode = _reminder_scope(db, user, data.project_id, data.related_task_id)
+    allowed = {member.id for member, _ in _eligible_recipients(db, user, access.project.id, mode)}
+    recipient_ids = list(dict.fromkeys(data.assignee_ids))
+    if any(rid not in allowed for rid in recipient_ids):
+        raise BadRequestError(
+            "Students can only remind the professors supervising this project."
+            if mode == "student"
+            else "Reminders can only go to active members of the project."
+        )
+
+    task = Task(
+        task_type="reminder",
+        title=data.title,
+        description=data.description,
+        project_id=access.project.id,
+        related_task_id=related.id if related else None,
+        created_by=user.id,
+        priority=data.priority,
+        due_at=data.due_at,
+    )
+    db.add(task)
+    db.flush()
+
+    about = f" about “{related.title}”" if related else ""
+    note = data.description.strip()
+    body = (
+        f"{user.full_name} sent you a reminder{about} in {access.project.title}: “{task.title}”."
+        + (f"\n{note[:600]}" if note else "")
+        + (f"\nWhen: {task.due_at:%Y-%m-%d %H:%M UTC}." if task.due_at else "")
+    )
+    for recipient_id in recipient_ids:
+        db.add(TaskAssignment(task_id=task.id, assignee_id=recipient_id, assigned_by=user.id))
+        enqueue_notification(
+            db,
+            recipient_id=recipient_id,
+            category="tasks",
+            event_type="task.reminder",
+            title=f"Reminder from {user.full_name}",
+            body=body,
+            entity_type="task",
+            entity_id=task.id,
+            dedupe_key=f"task.reminder:{task.id}:{recipient_id}",
+        )
+    record_audit(
+        db,
+        user.id,
+        "task.reminder_sent",
+        "task",
+        task.id,
+        {"project_id": task.project_id, "related_task_id": task.related_task_id, "recipient_ids": recipient_ids},
+    )
+    _commit(db)
+    db.refresh(task)
+    return task
+
+
 # --- Tasks ----------------------------------------------------------------------------
 
 
 def create_task(db: Session, user: User, data: TaskCreate) -> Task:
+    if data.task_type == "reminder":
+        return _create_reminder(db, user, data)
     if data.task_type == "personal":
         if not has_capability(user.role_names, "tasks.personal"):
             raise ForbiddenError("Only students can create personal tasks.")
@@ -258,6 +413,12 @@ def task_responses(db: Session, user: User, tasks: list[Task], detailed: bool = 
         db.execute(select(Project.id, Project.title).where(Project.id.in_(project_ids))).all()
     ) if project_ids else {}
     managed = set(db.scalars(managed_project_ids(user)).all()) if project_ids else set()
+    creator_ids = {task.created_by for task in tasks if task.created_by}
+    creators = {u.id: u for u in db.scalars(select(User).where(User.id.in_(creator_ids))).all()} if creator_ids else {}
+    related_ids = {task.related_task_id for task in tasks if task.related_task_id}
+    related_titles = dict(
+        db.execute(select(Task.id, Task.title).where(Task.id.in_(related_ids))).all()
+    ) if related_ids else {}
 
     assignments = db.scalars(
         select(TaskAssignment)
@@ -280,7 +441,9 @@ def task_responses(db: Session, user: User, tasks: list[Task], detailed: bool = 
     for task in tasks:
         task_assignments = by_task.get(task.id, [])
         can_manage = (
-            task.created_by == user.id if task.task_type == "personal" else task.project_id in managed
+            task.created_by == user.id
+            if task.task_type in ("personal", "reminder")
+            else task.project_id in managed
         )
         mine = next((a for a in task_assignments if a.assignee_id == user.id), None)
         visible = task_assignments if can_manage else ([mine] if mine else [])
@@ -302,6 +465,9 @@ def task_responses(db: Session, user: User, tasks: list[Task], detailed: bool = 
                 my_assignment=_assignment_response(mine, counts.get(mine.id, 0)) if mine else None,
                 assignments=[_assignment_response(a, counts.get(a.id, 0)) for a in visible] if detailed or can_manage else [],
                 can_manage=can_manage,
+                created_by_user=user_summary(creators[task.created_by]) if task.created_by in creators else None,
+                related_task_id=task.related_task_id,
+                related_task_title=related_titles.get(task.related_task_id),
             )
         )
     return responses
@@ -323,13 +489,16 @@ def list_tasks(
     managed = and_(Task.task_type == "official", Task.project_id.in_(managed_project_ids(user)))
     personal = and_(Task.task_type == "personal", Task.created_by == user.id)
     assigned = and_(Task.task_type == "official", mine)
+    sent_reminder = and_(Task.task_type == "reminder", Task.created_by == user.id)
+    reminders = or_(and_(Task.task_type == "reminder", mine), sent_reminder)
 
     scopes = {
         "assigned": assigned,
         "personal": personal,
         "mine": or_(assigned, personal),
         "managed": managed,
-        "all": or_(assigned, personal, managed),
+        "reminders": reminders,
+        "all": or_(assigned, personal, managed, reminders),
     }
     if scope not in scopes:
         raise BadRequestError("Invalid task scope.")
@@ -361,7 +530,7 @@ def list_tasks(
             exists().where(
                 TaskAssignment.task_id == Task.id,
                 TaskAssignment.status == status,
-                or_(TaskAssignment.assignee_id == user.id, managed),
+                or_(TaskAssignment.assignee_id == user.id, managed, sent_reminder),
             )
         )
 
@@ -371,7 +540,7 @@ def list_tasks(
             exists().where(
                 TaskAssignment.task_id == Task.id,
                 TaskAssignment.status != "completed",
-                or_(TaskAssignment.assignee_id == user.id, managed),
+                or_(TaskAssignment.assignee_id == user.id, managed, sent_reminder),
             ),
         )
 
@@ -418,7 +587,7 @@ def delete_task(db: Session, user: User, task_id: UUID) -> None:
 def add_assignees(db: Session, user: User, task_id: UUID, assignee_ids: list[UUID]) -> Task:
     context = _load_context(db, user, task_id)
     if context.task.task_type != "official":
-        raise BadRequestError("Personal tasks cannot be assigned.")
+        raise BadRequestError("Only official tasks can be assigned.")
     require(context.can_modify, "You cannot assign this task.")
 
     _assign(db, user, context.task, _validate_assignees(db, context.task.project_id, assignee_ids))
@@ -429,7 +598,7 @@ def add_assignees(db: Session, user: User, task_id: UUID, assignee_ids: list[UUI
 def remove_assignee(db: Session, user: User, task_id: UUID, assignee_id: UUID) -> None:
     context = _load_context(db, user, task_id)
     if context.task.task_type != "official":
-        raise BadRequestError("Personal tasks cannot be unassigned.")
+        raise BadRequestError("Only official tasks can be unassigned.")
     require(context.can_modify, "You cannot change this task's assignees.")
 
     assignment = db.scalar(
@@ -456,9 +625,10 @@ def change_status(db: Session, user: User, assignment_id: UUID, new_status: str)
     if context.project_access and not context.project_access.is_active:
         raise ForbiddenError("The project is archived; tasks are read-only.")
 
-    transitions = (
-        PERSONAL_TRANSITIONS if context.task.task_type == "personal" else OFFICIAL_ASSIGNEE_TRANSITIONS
-    )
+    transitions = {
+        "personal": PERSONAL_TRANSITIONS,
+        "reminder": REMINDER_TRANSITIONS,
+    }.get(context.task.task_type, OFFICIAL_ASSIGNEE_TRANSITIONS)
     if new_status not in transitions.get(assignment.status, set()):
         raise ConflictError(f"Cannot move a task from {assignment.status} to {new_status}.")
 

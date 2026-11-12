@@ -25,6 +25,7 @@ from app.models.notification import Notification, NotificationDeliveryAttempt
 from app.models.research import ResearchPaper
 from app.models.project import Project, ProjectMember
 from app.models.task import Task, TaskAssignment
+from app.services import discord_project_channels, handbook_reminder_dispatch
 from app.services.discord_client import DeliveryResult, DiscordSender
 from app.services.notification_service import (
     category_enabled,
@@ -44,19 +45,26 @@ def _format(notification: Notification) -> str:
     return f"**{notification.title}**\n{notification.body}".strip()
 
 
+# Channel posts that get a discussion thread. Only the lab-wide post's thread
+# is stored on the paper ("Discuss on Discord"); project channels are private.
+THREADED_EVENTS = {"paper.added": True, "paper.project_post": False}
+
+
 def _open_paper_thread(db: Session, notification: Notification, sender: DiscordSender, message_id: str) -> None:
     """Start the discussion thread for a newly posted paper.
 
     A thread failure is logged but does not fail the delivered post.
     """
 
+    store_on_paper = THREADED_EVENTS[notification.event_type]
     paper = db.get(ResearchPaper, notification.entity_id) if notification.entity_id else None
-    if paper is None or paper.discord_thread_id:
+    if paper is None or (store_on_paper and paper.discord_thread_id):
         return
 
     thread = sender.start_thread(notification.channel_id, message_id, paper.title)
     if thread.success and thread.channel_id:
-        paper.discord_thread_id = thread.channel_id
+        if store_on_paper:
+            paper.discord_thread_id = thread.channel_id
     else:
         logger.warning("Could not open a discussion thread for paper %s: %s", paper.id, thread.error)
 
@@ -64,9 +72,15 @@ def _open_paper_thread(db: Session, notification: Notification, sender: DiscordS
 def _deliver(db: Session, notification: Notification, sender: DiscordSender) -> DeliveryResult:
     if notification.channel_id:
         result = sender.send_message(notification.channel_id, _format(notification))
-        if result.success and result.message_id and notification.event_type == "paper.added":
+        if result.success and result.message_id and notification.event_type in THREADED_EVENTS:
             _open_paper_thread(db, notification, sender, result.message_id)
         return result
+
+    # A handbook reminder may have been deleted, dismissed or moved since
+    # it was queued; that is final, so do not retry it.
+    cancelled = handbook_reminder_dispatch.cancel_reason(db, notification)
+    if cancelled:
+        return DeliveryResult(False, None, cancelled, retryable=False)
 
     # Re-check at send time: the user may have unlinked or opted out.
     account = linked_account(db, notification.recipient_id)
@@ -266,6 +280,7 @@ def main() -> None:  # pragma: no cover - long-running process
         logger.warning("DISCORD_BOT_TOKEN is not set; notifications will be retried until it is configured.")
 
     last_reminder_scan = 0.0
+    last_channel_sync = 0.0
     logger.info("Notification worker started.")
     while running:
         try:
@@ -273,6 +288,12 @@ def main() -> None:  # pragma: no cover - long-running process
                 if time.monotonic() - last_reminder_scan > 300:
                     schedule_reminders(db)
                     last_reminder_scan = time.monotonic()
+                # Cheap (narrow time window) and run every poll so reminders
+                # created a few minutes ahead are still queued before they are due.
+                handbook_reminder_dispatch.dispatch_due_reminders(db)
+                if time.monotonic() - last_channel_sync > 60:
+                    discord_project_channels.sync_project_channels(db, sender)
+                    last_channel_sync = time.monotonic()
                 run_once(db, sender)
         except Exception:
             logger.exception("Notification worker iteration failed; continuing.")

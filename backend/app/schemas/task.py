@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 from app.schemas.admin import UserSummary
 
-TaskType = Literal["official", "personal"]
+TaskType = Literal["official", "personal", "reminder"]
 TaskPriority = Literal["low", "medium", "high", "urgent"]
 AssignmentStatus = Literal["todo", "in_progress", "under_review", "revision_required", "completed"]
 ReviewDecision = Literal["approved", "revision_required"]
@@ -20,6 +20,8 @@ class TaskCreate(BaseModel):
     priority: TaskPriority = "medium"
     due_at: datetime | None = None
     assignee_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    # Reminders: the task the reminder is about.
+    related_task_id: UUID | None = None
 
     @field_validator("title")
     @classmethod
@@ -42,6 +44,13 @@ class TaskCreate(BaseModel):
             raise ValueError("Official tasks must belong to a project.")
         if self.task_type == "personal" and self.assignee_ids:
             raise ValueError("Personal tasks cannot be assigned to others.")
+        if self.task_type == "reminder":
+            if not self.assignee_ids:
+                raise ValueError("Choose who should receive the reminder.")
+            if self.project_id is None and self.related_task_id is None:
+                raise ValueError("A reminder needs a project or a related task.")
+        elif self.related_task_id is not None:
+            raise ValueError("Only reminders can point at another task.")
         return self
 
 
@@ -129,6 +138,14 @@ class TaskResponse(BaseModel):
     my_assignment: AssignmentResponse | None = None
     assignments: list[AssignmentResponse] = []
     can_manage: bool = False
+    created_by_user: UserSummary | None = None
+    related_task_id: UUID | None = None
+    related_task_title: str | None = None
+
+
+class ReminderRecipient(BaseModel):
+    user: UserSummary
+    membership_role: str
 
 
 class PendingReviewResponse(BaseModel):

@@ -2,9 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prism Desk</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>PrismDesk · PRISM Lab</title>
+    <meta name="description" content="PrismDesk — research workspace for PRISM Lab (Power-aware Resilient Intelligent Secure Machines)." />
+    <link rel="icon" type="image/png" sizes="64x64" href="/brand/favicon-64.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      // Keep the key in sync with src/context/ThemeContext.tsx.
+      (function () {
+        var pref = "system";
+        try {
+          var stored = localStorage.getItem("prismdesk-theme");
+          if (stored === "light" || stored === "dark" || stored === "system") pref = stored;
+        } catch (e) {}
+        var dark =
+          pref === "dark" ||
+          (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var root = document.documentElement;
+        if (dark) root.classList.add("dark");
+        root.style.colorScheme = dark ? "dark" : "light";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

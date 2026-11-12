@@ -21,6 +21,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Tasks", to: "/tasks", capability: "tasks.view", section: "Workspace" },
   { label: "Handbook", to: "/handbook", capability: "handbook.view", section: "Workspace" },
   { label: "Conferences", to: "/conferences", section: "Workspace" },
+  { label: "Journals", to: "/journals", capability: "journals.view", section: "Workspace" },
   { label: "User Management", to: "/admin/users", capability: "users.manage", section: "Administration" },
   { label: "Audit Logs", to: "/admin/audit", capability: "audit.view", section: "Administration" },
   { label: "Announcements", to: "/admin/announcements", capability: "announcements.send", section: "Administration" },

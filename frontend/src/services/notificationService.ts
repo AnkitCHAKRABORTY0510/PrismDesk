@@ -40,6 +40,8 @@ const base = "/api/v1/notifications";
 export const discordStatus = async () => (await api.get<DiscordStatus>(`${base}/discord`)).data;
 export const startDiscordLink = async () =>
   (await api.post<{ authorize_url: string }>(`${base}/discord/link`)).data;
+export const sendDiscordTest = async () =>
+  (await api.post<MessageResponse>(`${base}/discord/test`)).data;
 export const unlinkDiscord = async () => (await api.delete<MessageResponse>(`${base}/discord`)).data;
 export const getPreferences = async () => (await api.get<Preference[]>(`${base}/preferences`)).data;
 export const savePreferences = async (preferences: Preference[]) =>

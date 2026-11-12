@@ -25,6 +25,39 @@ export interface ActivityItem {
   created_at: string;
 }
 
+export interface MemberChip {
+  user_id: string;
+  username: string;
+  full_name: string;
+  membership_role: string;
+}
+
+export interface RepoLinkChip {
+  url: string;
+  label: string | null;
+}
+
+export interface ReadingListItem {
+  paper_id: string;
+  title: string;
+  venue: string | null;
+  publication_year: number | null;
+  status: "not_started" | "reading" | "completed";
+}
+
+export interface MemberReading {
+  user_id: string;
+  username: string;
+  full_name: string;
+  counts: Record<string, number>;
+  total: number;
+}
+
+export interface DayCount {
+  day: string;
+  count: number;
+}
+
 export interface ProjectSummaryItem {
   id: string;
   title: string;
@@ -35,6 +68,9 @@ export interface ProjectSummaryItem {
   assignments_completed: number;
   pending_reviews: number;
   overdue: number;
+  assignment_counts: Record<string, number>;
+  members: MemberChip[];
+  repo_links: RepoLinkChip[];
 }
 
 export interface HandbookItem {
@@ -64,6 +100,8 @@ export interface AdminDashboardData {
   notifications: CountMap;
   upcoming_conferences: DeadlineItem[];
   recent_activity: ActivityItem[];
+  my_reading: CountMap;
+  reading_list: ReadingListItem[];
 }
 
 export interface ProfessorDashboardData {
@@ -74,6 +112,10 @@ export interface ProfessorDashboardData {
   recent_handbook_entries: HandbookItem[];
   upcoming_deadlines: DeadlineItem[];
   reading_progress: CountMap;
+  my_reading: CountMap;
+  reading_list: ReadingListItem[];
+  member_reading: MemberReading[];
+  open_reminders?: number;
 }
 
 export interface StudentDashboardData {
@@ -88,6 +130,10 @@ export interface StudentDashboardData {
   handbook_entries_last_30_days: number;
   recent_handbook_entries: HandbookItem[];
   upcoming_deadlines: DeadlineItem[];
+  reading_list: ReadingListItem[];
+  handbook_days: DayCount[];
+  handbook_streak: number;
+  open_reminders?: number;
 }
 
 export interface GuestDashboardData {

@@ -116,7 +116,7 @@ export default function Announcements() {
                   { header: "Title", cell: (row) => row.title },
                   { header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
                   { header: "Attempts", cell: (row) => `${row.attempt_count}/${row.max_attempts}` },
-                  { header: "Last error", cell: (row) => <span className="text-xs text-slate-500">{row.last_error ?? "—"}</span> },
+                  { header: "Last error", cell: (row) => <span className="text-xs text-fg-muted">{row.last_error ?? "—"}</span> },
                   {
                     header: "",
                     cell: (row) =>

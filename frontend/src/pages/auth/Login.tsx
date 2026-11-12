@@ -3,7 +3,8 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import axios from "axios";
 
 import { useAuth } from "../../context/AuthContext";
-import "./Login.css";
+import { AuthBrand, AuthThemeToggle } from "./AuthBrand";
+import "./auth.css";
 
 // Users without any role cannot use the application.
 function getDashboardPath(roles: string[]): string | null {
@@ -72,7 +73,7 @@ export default function Login() {
   };
 
   if (loading) {
-    return <div className="login-loading">Checking your session...</div>;
+    return <div className="auth-loading">Checking your session...</div>;
   }
 
   // Redirect users who already have an active session (declaratively,
@@ -82,23 +83,26 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
+    <div className="auth-page">
+      <AuthThemeToggle />
+      <div className="auth-card">
 
-        <div className="login-brand">
-          <div className="login-logo">P</div>
-          <h1>Prism Desk</h1>
+        <AuthBrand />
+
+        <div className="auth-body">
+        <div className="auth-product">
+          <h1>PrismDesk</h1>
           <p>One Lab. Multiple Projects. Connected Research.</p>
         </div>
 
-        <div className="login-heading">
+        <div className="auth-heading">
           <h2>Welcome back</h2>
           <p>Sign in to access your research workspace.</p>
         </div>
 
         <form onSubmit={handleSubmit}>
 
-          <div className="login-field">
+          <div className="auth-field">
             <label htmlFor="identifier">
               Username or Email
             </label>
@@ -114,12 +118,12 @@ export default function Login() {
             />
           </div>
 
-          <div className="login-field">
+          <div className="auth-field">
             <label htmlFor="password">
               Password
             </label>
 
-            <div className="password-wrapper">
+            <div className="auth-password">
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -132,7 +136,7 @@ export default function Login() {
 
               <button
                 type="button"
-                className="password-toggle"
+                className="auth-password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? "Hide" : "Show"}
@@ -141,14 +145,14 @@ export default function Login() {
           </div>
 
           {error && (
-            <div className="login-error" role="alert">
+            <div className="auth-error" role="alert">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="login-button"
+            className="auth-button"
             disabled={submitting}
           >
             {submitting ? "Signing in..." : "Sign In"}
@@ -156,17 +160,18 @@ export default function Login() {
 
         </form>
 
-        <div className="login-footer">
+        <div className="auth-footer">
           <p>
             Don't have an account?{" "}
             <Link to="/register">Create an account</Link>
           </p>
         </div>
+        </div>
 
       </div>
 
-      <div className="login-copyright">
-        PRISM Laboratory | Prism Desk
+      <div className="auth-copyright">
+        PRISM Lab · PrismDesk
       </div>
     </div>
   );

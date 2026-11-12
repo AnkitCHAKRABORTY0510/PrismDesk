@@ -1,7 +1,8 @@
 import api from "./api";
 import { cleanParams, type MessageResponse, type Page, type QueryParams, type UserSummary } from "./types";
 
-export type TaskType = "official" | "personal";
+/** "reminder": a nudge sent to other users, usually about a related official task. */
+export type TaskType = "official" | "personal" | "reminder";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type AssignmentStatus = "todo" | "in_progress" | "under_review" | "revision_required" | "completed";
 
@@ -33,6 +34,15 @@ export interface Task {
   my_assignment: Assignment | null;
   assignments: Assignment[];
   can_manage: boolean;
+  // Always sent by the server; optional so older fixtures stay valid.
+  created_by_user?: UserSummary | null;
+  related_task_id?: string | null;
+  related_task_title?: string | null;
+}
+
+export interface ReminderRecipient {
+  user: UserSummary;
+  membership_role: string;
 }
 
 export interface Review {
@@ -72,6 +82,7 @@ export interface TaskInput {
   priority: TaskPriority;
   due_at: string | null;
   assignee_ids: string[];
+  related_task_id?: string | null;
 }
 
 const base = "/api/v1/tasks";
@@ -102,3 +113,6 @@ export const reviewSubmission = async (
 ) => (await api.post<Submission>(`${base}/submissions/${submissionId}/review`, { decision, feedback })).data;
 export const pendingReviews = async (params: QueryParams = {}) =>
   (await api.get<Page<PendingReview>>(`${base}/reviews/pending`, { params: cleanParams(params) })).data;
+/** Who the current user may remind, for a project or about one task. */
+export const reminderRecipients = async (params: { project_id?: string | null; related_task_id?: string | null }) =>
+  (await api.get<ReminderRecipient[]>(`${base}/reminder-recipients`, { params: cleanParams(params) })).data;

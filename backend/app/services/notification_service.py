@@ -49,8 +49,21 @@ def enqueue_notification(
     channel_id: str | None = None,
     entity_type: str | None = None,
     entity_id: UUID | str | None = None,
+    deliver_after: datetime | None = None,
 ) -> bool:
-    """Queue a Discord notification. Returns True when a row was queued."""
+    """Queue a Discord notification. Returns True when a row was queued.
+
+    ``deliver_after`` holds the message until that (timezone-aware) time:
+    it becomes the row's first ``next_attempt_at``, and the worker only
+    claims rows whose ``next_attempt_at`` has passed. Omit it to send as
+    soon as the worker next polls.
+    """
+
+    if deliver_after is not None and deliver_after.tzinfo is None:
+        # A naive time would be read in the database's zone; refuse it
+        # without breaking the caller, like every other enqueue failure.
+        logger.warning("Ignoring notification %s with a naive deliver_after time.", event_type)
+        return False
 
     if category not in NOTIFICATION_CATEGORIES:
         logger.warning("Ignoring notification with unknown category %s", category)
@@ -79,6 +92,8 @@ def enqueue_notification(
                     entity_id=str(entity_id) if entity_id is not None else None,
                     dedupe_key=dedupe_key[:255],
                     max_attempts=settings.NOTIFICATION_MAX_ATTEMPTS,
+                    # Without a time the column's server default (now()) applies.
+                    **({"next_attempt_at": deliver_after} if deliver_after is not None else {}),
                 )
                 .on_conflict_do_nothing(index_elements=["dedupe_key"])
                 .returning(Notification.id)

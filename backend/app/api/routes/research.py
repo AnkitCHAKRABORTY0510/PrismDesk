@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, page_params, require_capability
+from app.core.rate_limit import rate_limit
 from app.database.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, Page, PageParams
@@ -22,7 +23,7 @@ from app.schemas.research import (
 )
 from app.schemas.research import normalize_doi
 from app.services import research_service
-from app.services.doi_lookup import lookup_doi
+from app.services.paper_metadata import resolve as resolve_metadata
 
 router = APIRouter(prefix="/research", tags=["Research Library"])
 
@@ -67,23 +68,45 @@ def list_papers(
     )
 
 
-@router.get("/lookup", response_model=DoiLookupResponse)
-def doi_lookup(
-    doi: str = Query(min_length=6, max_length=255),
+@router.get(
+    "/lookup",
+    response_model=DoiLookupResponse,
+    dependencies=[Depends(rate_limit("paper_lookup", "PAPER_LOOKUP_RATE_LIMIT"))],
+)
+def paper_lookup(
+    q: str | None = Query(
+        default=None,
+        max_length=1000,
+        description="A DOI (bare, doi: or doi.org link), arXiv ID or link, any paper web page, or a title.",
+    ),
+    doi: str | None = Query(default=None, max_length=255, description="Strict DOI lookup (older clients)."),
     db: Session = Depends(get_db),
     user: User = Depends(require_capability("research.create")),
 ):
-    """Suggest metadata for a DOI (for example one found in a PDF in the browser)."""
+    """Suggest paper metadata for the "Quick add" box. Nothing is saved.
 
-    try:
-        normalized = normalize_doi(doi)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
-    if not normalized:
-        raise HTTPException(status_code=422, detail="Enter a DOI.")
+    ``existing_paper_id`` is set when the library already has the paper
+    (same DOI, arXiv DOI or URL), so the form can warn about duplicates.
+    """
 
-    duplicate = research_service._find_duplicate(db, normalized, None)
-    result = DoiLookupResponse(**lookup_doi(normalized))
+    if doi is not None and q is None:
+        try:
+            normalized = normalize_doi(doi)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error))
+        if not normalized:
+            raise HTTPException(status_code=422, detail="Enter a DOI.")
+        q = normalized
+    if not q or not q.strip():
+        raise HTTPException(status_code=422, detail="Paste a DOI, arXiv ID, link or paper title.")
+
+    data = resolve_metadata(q)
+    arxiv_doi = data.pop("arxiv_doi", None)
+    duplicate = research_service._find_duplicate(db, data.get("doi"), data.get("url"))
+    if duplicate is None and arxiv_doi and arxiv_doi != data.get("doi"):
+        duplicate = research_service._find_duplicate(db, arxiv_doi, None)
+
+    result = DoiLookupResponse(**data)
     result.existing_paper_id = duplicate.id if duplicate else None
     return result
 
@@ -120,6 +143,16 @@ def update_paper(
     user: User = Depends(get_current_user),
 ):
     return _one(db, user, research_service.update_paper(db, user, paper_id, data))
+
+
+@router.delete("/papers/{paper_id}", response_model=MessageResponse)
+def delete_paper(
+    paper_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    research_service.delete_paper(db, user, paper_id)
+    return MessageResponse(message="Paper deleted.")
 
 
 @router.post("/papers/{paper_id}/projects", response_model=PaperResponse)

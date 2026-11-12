@@ -87,3 +87,22 @@ export const changeMemberRole = async (id: string, userId: string, role: Exclude
 
 export const removeMember = async (id: string, userId: string) =>
   (await api.delete<MessageResponse>(`${base}/${id}/members/${userId}`)).data;
+
+export interface RepoLink {
+  id: string;
+  project_id: string;
+  url: string;
+  label: string | null;
+  added_by: string | null;
+  added_by_username: string | null;
+  created_at: string;
+  can_remove: boolean;
+}
+
+export const listRepoLinks = async (id: string) => (await api.get<RepoLink[]>(`${base}/${id}/repo-links`)).data;
+
+export const addRepoLink = async (id: string, url: string, label?: string) =>
+  (await api.post<RepoLink>(`${base}/${id}/repo-links`, { url, label: label || null })).data;
+
+export const removeRepoLink = async (id: string, linkId: string) =>
+  (await api.delete<MessageResponse>(`${base}/${id}/repo-links/${linkId}`)).data;

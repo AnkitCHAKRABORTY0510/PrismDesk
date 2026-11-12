@@ -100,9 +100,9 @@ export default function TaskFormModal({
         </div>
         {!task && taskType === "official" && (
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-slate-700">Assign to students</legend>
+            <legend className="text-sm font-medium text-fg-soft">Assign to students</legend>
             {assignable.length === 0 ? (
-              <p className="text-xs text-slate-500">No student members yet. You can assign later.</p>
+              <p className="text-xs text-fg-muted">No student members yet. You can assign later.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {assignable.map((member) => {
@@ -122,10 +122,10 @@ export default function TaskFormModal({
                 })}
               </div>
             )}
-            <p className="text-xs text-slate-500">Each student gets an independent status and submission history.</p>
+            <p className="text-xs text-fg-muted">Each student gets an independent status and submission history.</p>
           </fieldset>
         )}
-        {taskType === "personal" && !task && <p className="text-xs text-slate-500">Personal tasks are private to you.</p>}
+        {taskType === "personal" && !task && <p className="text-xs text-fg-muted">Personal tasks are private to you.</p>}
         {error && <Alert>{error}</Alert>}
       </form>
     </Modal>

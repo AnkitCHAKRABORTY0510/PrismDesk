@@ -3,270 +3,315 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-@custom-variant dark (&:is(.dark *));
+/* Dark mode is class-driven: <html class="dark"> (set by ThemeProvider and
+   the inline script in index.html before first paint). */
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* Prism Desk brand tokens (usable as bg-brand, text-brand, …). */
-@theme {
-  --color-brand: #24408e;
-  --color-brand-hover: #1b3170;
-  --color-navy: #182746;
-  --color-navy-light: #22345a;
-}
+/* ------------------------------------------------------------------ */
+/* PRISM Lab theme tokens                                              */
+/* ------------------------------------------------------------------ */
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: oklch(0.922 0 0);
-  --code-bg: #f4f3ec;
-  --accent: oklch(0.97 0 0);
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
   color-scheme: light;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  /* Surfaces */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #f1f3f5;
+  --line: #e4e7eb;
+  --line-strong: #d0d5db;
 
-  --background: oklch(1 0 0);
+  /* Text */
+  --fg: #0f1419;
+  --fg-soft: #2f3640;
+  --fg-muted: #5b6470;
+  --fg-subtle: #8a929c;
 
-  --foreground: oklch(0.145 0 0);
+  /* Brand */
+  --primary: #1f6feb;
+  --primary-hover: #1a5fd0;
+  --primary-fg: #ffffff;
+  --link: #1a62d6;
+  --accent: #1f6feb;
+  --ring: #1f6feb;
 
-  --card: oklch(1 0 0);
+  /* Status */
+  --success: #1a7f37;
+  --success-hover: #166c2f;
+  --success-soft: #eaf6ec;
+  --success-fg: #1a7f37;
+  --success-line: #b7e1c0;
+  --warn: #9a6700;
+  --warn-soft: #fbf3e0;
+  --warn-fg: #7d5400;
+  --warn-line: #ead7a4;
+  --danger: #cf222e;
+  --danger-hover: #b31d27;
+  --danger-soft: #fdecee;
+  --danger-fg: #b31d27;
+  --danger-line: #f4c0c5;
+  --info-soft: #eaf1fd;
+  --info-fg: #1a5fd0;
+  --info-line: #bcd2f7;
+  /* "violet" tone kept for existing callers but drawn in teal: the PRISM
+     palette has no purple. */
+  --violet-soft: #e6f7fa;
+  --violet-fg: #0a6e80;
+  --violet-line: #a5e3ee;
 
-  --card-foreground: oklch(0.145 0 0);
+  --track: #eceff2;
+  --shadow-lift: 0 4px 14px -6px rgb(15 20 25 / 0.16);
 
-  --popover: oklch(1 0 0);
+  /* Effects */
+  --overlay: rgb(6 11 26 / 0.55);
+  --shadow-card: none;
+  --shadow-pop: 0 12px 32px -8px rgb(15 20 25 / 0.18), 0 4px 10px -4px rgb(15 20 25 / 0.08);
+  --rainbow: linear-gradient(90deg, #ff3b4d, #ff9a1f, #ffd93b, #2fdc74, #22c4dd, #1e9bff);
 
-  --popover-foreground: oklch(0.145 0 0);
-
-  --primary: oklch(0.205 0 0);
-
-  --primary-foreground: oklch(0.985 0 0);
-
-  --secondary: oklch(0.97 0 0);
-
-  --secondary-foreground: oklch(0.205 0 0);
-
-  --muted: oklch(0.97 0 0);
-
-  --muted-foreground: oklch(0.556 0 0);
-
-  --accent-foreground: oklch(0.205 0 0);
-
-  --destructive: oklch(0.577 0.245 27.325);
-
-  --input: oklch(0.922 0 0);
-
-  --ring: oklch(0.708 0 0);
-
-  --chart-1: oklch(0.87 0 0);
-
-  --chart-2: oklch(0.556 0 0);
-
-  --chart-3: oklch(0.439 0 0);
-
-  --chart-4: oklch(0.371 0 0);
-
-  --chart-5: oklch(0.269 0 0);
-
-  --radius: 0.625rem;
-
-  --sidebar: oklch(0.985 0 0);
-
-  --sidebar-foreground: oklch(0.145 0 0);
-
-  --sidebar-primary: oklch(0.205 0 0);
-
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-
-  --sidebar-accent: oklch(0.97 0 0);
-
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-
-  --sidebar-border: oklch(0.922 0 0);
-
-  --sidebar-ring: oklch(0.708 0 0)
+  /* shadcn compatibility (maps its names onto the PRISM tokens) */
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --card: var(--surface);
+  --card-foreground: var(--fg);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--fg);
+  --primary-foreground: var(--primary-fg);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--fg);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--fg-muted);
+  --accent-foreground: var(--fg);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+.dark {
+  color-scheme: dark;
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
+  --bg: #0b0d10;
+  --surface: #121519;
+  --surface-raised: #181c21;
+  --surface-muted: #181c21;
+  --line: #23272e;
+  --line-strong: #323840;
 
-/* Template element defaults sit in the base layer so Tailwind utilities win. */
-@layer base {
-#root {
-  width: 100%;
-  margin: 0;
-  text-align: left;
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
+  --fg: #e8eaed;
+  --fg-soft: #c4c9d0;
+  --fg-muted: #9aa1ab;
+  --fg-subtle: #6b7280;
 
-body {
-  margin: 0;
-}
+  --primary: #4c9bff;
+  --primary-hover: #6aacff;
+  --primary-fg: #0b0d10;
+  --link: #6aacff;
+  --accent: #4c9bff;
+  --ring: #4c9bff;
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+  --success: #3fb950;
+  --success-hover: #56c364;
+  --success-soft: rgb(63 185 80 / 0.12);
+  --success-fg: #56c364;
+  --success-line: rgb(63 185 80 / 0.32);
+  --warn: #d29922;
+  --warn-soft: rgb(210 153 34 / 0.12);
+  --warn-fg: #e0b04a;
+  --warn-line: rgb(210 153 34 / 0.32);
+  --danger: #f85149;
+  --danger-hover: #ff6a62;
+  --danger-soft: rgb(248 81 73 / 0.12);
+  --danger-fg: #ff7b72;
+  --danger-line: rgb(248 81 73 / 0.35);
+  --info-soft: rgb(76 155 255 / 0.12);
+  --info-fg: #6aacff;
+  --info-line: rgb(76 155 255 / 0.32);
+  --violet-soft: rgb(43 203 224 / 0.12);
+  --violet-fg: #5ad8e8;
+  --violet-line: rgb(43 203 224 / 0.32);
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
+  --track: #1c2026;
+  --shadow-lift: 0 6px 18px -8px rgb(0 0 0 / 0.7);
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
-}
+  --overlay: rgb(0 0 0 / 0.6);
+  --shadow-card: none;
+  --shadow-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
 }
 
 @theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
-  --font-sans: 'Inter Variable', sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --color-canvas: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-brand: var(--primary);
+  --color-brand-hover: var(--primary-hover);
+  --color-brand-fg: var(--primary-fg);
+  --color-link: var(--link);
   --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
+
+  --color-success: var(--success);
+  --color-success-hover: var(--success-hover);
+  --color-success-soft: var(--success-soft);
+  --color-success-fg: var(--success-fg);
+  --color-success-line: var(--success-line);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-line: var(--warn-line);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-line: var(--danger-line);
+  --color-info-soft: var(--info-soft);
+  --color-info-fg: var(--info-fg);
+  --color-info-line: var(--info-line);
+  --color-violet-soft: var(--violet-soft);
+  --color-violet-fg: var(--violet-fg);
+  --color-violet-line: var(--violet-line);
+
+  --color-track: var(--track);
+
+  /* The navigation rail is always a dark navy brand panel (the logo is
+     designed for dark backgrounds), in both light and dark mode. */
+  --color-navy: #0e1116;
+  --color-navy-light: #181c22;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-lift: var(--shadow-lift);
+
+  /* shadcn compatibility */
   --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+@utility bg-rainbow {
+  background-image: var(--rainbow);
 }
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;}
-  body {
-    @apply bg-background text-foreground;}
+    border-color: var(--line);
+  }
+
   html {
-    @apply font-sans;}}
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::selection {
+    background-color: rgb(30 155 255 / 0.25);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--fg-subtle);
+  }
+
+  /* Native date/time pickers follow the theme via color-scheme. */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"] {
+    color-scheme: inherit;
+  }
+}
+
+/* Skeleton shimmer for loading placeholders. */
+@utility skeleton {
+  background-color: var(--surface-muted);
+  border-radius: 0.5rem;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/*
+ * Compatibility for hard-coded palette classes still used in the add-paper
+ * form (PaperFormModal.tsx), which is intentionally not edited here.
+ * Unlayered so they win over the utility layer in dark mode only.
+ */
+.dark .bg-slate-50 {
+  background-color: var(--surface-muted);
+}
+.dark .border-slate-300 {
+  border-color: var(--line-strong);
+}
+.dark .text-slate-500 {
+  color: var(--fg-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, page_params
 from app.database.session import get_db
 from app.models.user import User
+from app.schemas.admin import user_summary
 from app.schemas.common import MessageResponse, Page, PageParams
 from app.schemas.task import (
     AssigneesRequest,
     AssignmentResponse,
     AssignmentStatus,
     PendingReviewResponse,
+    ReminderRecipient,
     ReviewCreate,
     SubmissionCreate,
     SubmissionResponse,
@@ -34,7 +36,7 @@ def _detail(db, user, task) -> TaskResponse:
 
 @router.get("", response_model=Page[TaskResponse])
 def list_tasks(
-    scope: Literal["all", "mine", "assigned", "personal", "managed"] = "all",
+    scope: Literal["all", "mine", "assigned", "personal", "managed", "reminders"] = "all",
     status_filter: AssignmentStatus | None = Query(default=None, alias="status"),
     project_id: UUID | None = None,
     task_type: TaskType | None = None,
@@ -59,6 +61,21 @@ def list_tasks(
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(data: TaskCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return _detail(db, user, task_service.create_task(db, user, data))
+
+
+@router.get("/reminder-recipients", response_model=list[ReminderRecipient])
+def reminder_recipients(
+    project_id: UUID | None = None,
+    related_task_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Who the caller may remind in a project (or about a task)."""
+
+    return [
+        ReminderRecipient(user=user_summary(member), membership_role=role)
+        for member, role in task_service.reminder_recipients(db, user, project_id, related_task_id)
+    ]
 
 
 @router.get("/reviews/pending", response_model=Page[PendingReviewResponse])

@@ -6,6 +6,7 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 import { useId } from "react";
+import { Inbox } from "lucide-react";
 
 import { humanize } from "../../lib/format";
 
@@ -16,11 +17,11 @@ function cx(...classes: (string | false | null | undefined)[]) {
 type Variant = "primary" | "secondary" | "danger" | "ghost" | "success";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-hover",
-  secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-  danger: "bg-red-600 text-white hover:bg-red-700",
-  success: "bg-emerald-600 text-white hover:bg-emerald-700",
-  ghost: "text-slate-600 hover:bg-slate-100",
+  primary: "bg-brand text-link-fg shadow-sm hover:bg-brand-hover",
+  secondary: "border border-line-strong bg-surface text-fg-soft shadow-sm hover:bg-surface-muted hover:text-fg",
+  danger: "bg-danger text-white shadow-sm hover:bg-danger-hover",
+  success: "bg-success text-white shadow-sm hover:bg-success-hover",
+  ghost: "text-fg-soft hover:bg-surface-muted hover:text-fg",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -44,8 +45,8 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-        size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-4 py-2 text-sm",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-60",
+        size === "sm" ? "h-8 px-3 text-xs" : "h-10 px-4 text-sm",
         VARIANTS[variant],
         className
       )}
@@ -68,10 +69,10 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={cx("rounded-xl border border-slate-200 bg-white p-5 shadow-sm", className)}>
+    <section className={cx("min-w-0 rounded-xl border border-line bg-surface p-4 shadow-card sm:p-5", className)}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          {title && <h2 className="text-base font-semibold text-slate-800">{title}</h2>}
+          {title && <h2 className="text-base font-semibold text-fg">{title}</h2>}
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </div>
       )}
@@ -82,16 +83,16 @@ export function Card({
 
 export function StatCard({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
-      {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
+    <div className="min-w-0 rounded-xl border border-line bg-surface p-4 shadow-card">
+      <div className="truncate text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">{value}</div>
+      {hint && <div className="mt-1 text-xs text-fg-muted">{hint}</div>}
     </div>
   );
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:bg-slate-100";
+  "w-full min-w-0 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-fg shadow-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/25 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted";
 
 interface FieldProps {
   label: string;
@@ -104,12 +105,12 @@ export function Field({ label, hint, error, children }: FieldProps) {
   const id = useId();
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="block text-sm font-medium text-fg-soft">
         {label}
       </label>
       {children(id)}
-      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {hint && !error && <p className="text-xs text-fg-muted">{hint}</p>}
+      {error && <p className="text-xs text-danger-fg">{error}</p>}
     </div>
   );
 }
@@ -148,7 +149,7 @@ export function SearchInput({
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
-      className={cx(inputClass, "min-w-[14rem] flex-1")}
+      className={cx(inputClass, "basis-full sm:basis-56 flex-1")}
     />
   );
 }
@@ -167,7 +168,7 @@ export function FilterSelect({
   allLabel?: string;
 }) {
   return (
-    <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={cx(inputClass, "w-auto")}>
+    <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={cx(inputClass, "w-full sm:w-auto")}>
       <option value="">{allLabel}</option>
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -179,12 +180,12 @@ export function FilterSelect({
 }
 
 const BADGE_TONES: Record<string, string> = {
-  green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  amber: "bg-amber-50 text-amber-700 ring-amber-200",
-  red: "bg-red-50 text-red-700 ring-red-200",
-  blue: "bg-blue-50 text-blue-700 ring-blue-200",
-  violet: "bg-violet-50 text-violet-700 ring-violet-200",
-  slate: "bg-slate-100 text-slate-600 ring-slate-200",
+  green: "bg-success-soft text-success-fg ring-success-line",
+  amber: "bg-warn-soft text-warn-fg ring-warn-line",
+  red: "bg-danger-soft text-danger-fg ring-danger-line",
+  blue: "bg-info-soft text-info-fg ring-info-line",
+  violet: "bg-violet-soft text-violet-fg ring-violet-line",
+  slate: "bg-surface-muted text-fg-soft ring-line-strong",
 };
 
 const STATUS_TONES: Record<string, keyof typeof BADGE_TONES> = {
@@ -216,7 +217,7 @@ const STATUS_TONES: Record<string, keyof typeof BADGE_TONES> = {
 
 export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: keyof typeof BADGE_TONES }) {
   return (
-    <span className={cx("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", BADGE_TONES[tone])}>
+    <span className={cx("inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", BADGE_TONES[tone])}>
       {children}
     </span>
   );
@@ -228,9 +229,9 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Alert({ kind = "error", children }: { kind?: "error" | "success" | "info"; children: ReactNode }) {
   const styles = {
-    error: "border-red-200 bg-red-50 text-red-700",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    info: "border-blue-200 bg-blue-50 text-blue-700",
+    error: "border-danger-line bg-danger-soft text-danger-fg",
+    success: "border-success-line bg-success-soft text-success-fg",
+    info: "border-info-line bg-info-soft text-info-fg",
   }[kind];
   return (
     <div role={kind === "error" ? "alert" : "status"} className={cx("rounded-lg border px-4 py-3 text-sm", styles)}>
@@ -243,7 +244,7 @@ export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: 
   if (!message) return null;
   return (
     <Alert>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span>{message}</span>
         {onRetry && (
           <Button size="sm" variant="secondary" onClick={onRetry}>
@@ -257,8 +258,8 @@ export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: 
 
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
-    <div role="status" className="flex items-center gap-3 py-8 text-sm text-slate-500">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-brand" />
+    <div role="status" className="flex items-center gap-3 py-8 text-sm text-fg-muted">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-ring" aria-hidden="true" />
       {label}
     </div>
   );
@@ -266,9 +267,10 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
 
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 px-6 py-10 text-center">
-      <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
-      {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+    <div className="rounded-xl border border-dashed border-line-strong bg-surface-muted/40 px-4 py-10 text-center sm:px-6">
+      <Inbox className="mx-auto mb-3 h-8 w-8 text-fg-subtle" aria-hidden="true" />
+      <h3 className="text-sm font-semibold text-fg-soft">{title}</h3>
+      {description && <p className="mx-auto mt-1 max-w-md text-sm text-fg-muted">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -279,13 +281,13 @@ export function ProgressBar({ value, label }: { value: number; label?: string })
   return (
     <div>
       {label && (
-        <div className="mb-1 flex justify-between text-xs text-slate-500">
+        <div className="mb-1 flex justify-between gap-2 text-xs text-fg-muted">
           <span>{label}</span>
           <span>{pct}%</span>
         </div>
       )}
-      <div className="h-2 rounded-full bg-slate-100" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-        <div className="h-2 rounded-full bg-brand" style={{ width: `${pct}%` }} />
+      <div className="h-2 overflow-hidden rounded-full bg-surface-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-2 rounded-full bg-brand transition-[width]" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -295,9 +297,25 @@ export function ExternalLink({ href, children }: { href: string; children?: Reac
   // Only http(s) links are rendered as clickable anchors.
   if (!/^https?:\/\//i.test(href)) return <span>{children ?? href}</span>;
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="break-all text-brand underline-offset-2 hover:underline">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="break-all text-link underline-offset-2 hover:underline">
       {children ?? href}
     </a>
   );
 }
 
+
+// Simple shimmering placeholder blocks for loading states.
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden="true" className={cx("skeleton h-4", className)} />;
+}
+
+export function SkeletonRows({ rows = 4, label = "Loading…" }: { rows?: number; label?: string }) {
+  return (
+    <div role="status" className="space-y-3 py-2">
+      <span className="sr-only">{label}</span>
+      {Array.from({ length: rows }, (_, index) => (
+        <Skeleton key={index} className={index % 2 ? "w-4/5" : "w-full"} />
+      ))}
+    </div>
+  );
+}

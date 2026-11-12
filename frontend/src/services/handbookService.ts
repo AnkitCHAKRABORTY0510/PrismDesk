@@ -86,3 +86,41 @@ export const updateSummary = async (id: string, input: Partial<Pick<DailySummary
   (await api.patch<DailySummary>(`${base}/summaries/${id}`, input)).data;
 export const summaryVersions = async (id: string) =>
   (await api.get<Version[]>(`${base}/summaries/${id}/versions`)).data;
+
+// --- Shared notes: written by a student for their supervisors -------------
+
+export interface SharedComment {
+  id: string;
+  note_id: string;
+  parent_id: string | null;
+  author: UserSummary | null;
+  body: string;
+  created_at: string;
+  replies: SharedComment[];
+}
+
+export interface SharedNote {
+  id: string;
+  student: UserSummary;
+  entry_date: string;
+  body: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  comment_count: number;
+  comments: SharedComment[];
+  can_edit: boolean;
+  can_comment: boolean;
+}
+
+export const listSharedNotes = async (params: QueryParams = {}) =>
+  (await api.get<Page<SharedNote>>(`${base}/shared-notes`, { params: cleanParams(params) })).data;
+export const getSharedNote = async (id: string) => (await api.get<SharedNote>(`${base}/shared-notes/${id}`)).data;
+export const createSharedNote = async (entryDate: string, body: string) =>
+  (await api.post<SharedNote>(`${base}/shared-notes`, { entry_date: entryDate, body })).data;
+export const updateSharedNote = async (id: string, body: string) =>
+  (await api.patch<SharedNote>(`${base}/shared-notes/${id}`, { body })).data;
+export const sharedNoteVersions = async (id: string) =>
+  (await api.get<Version[]>(`${base}/shared-notes/${id}/versions`)).data;
+export const addSharedComment = async (id: string, body: string, parentId?: string) =>
+  (await api.post<SharedNote>(`${base}/shared-notes/${id}/comments`, { body, parent_id: parentId ?? null })).data;

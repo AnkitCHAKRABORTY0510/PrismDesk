@@ -86,3 +86,79 @@ class ConferenceResponse(BaseModel):
 
 class ConferenceLinkRequest(BaseModel):
     project_id: UUID
+
+
+# --- Browse catalog (ccfddl/ccf-deadlines) ---------------------------------
+
+
+class CatalogTimelineItem(BaseModel):
+    deadline: datetime | None
+    abstract_deadline: datetime | None
+    comment: str | None
+    deadline_tbd: bool
+
+
+class CatalogItem(BaseModel):
+    key: str
+    acronym: str
+    name: str
+    category: str | None
+    category_label: str | None
+    ccf_rank: str | None
+    core_rank: str | None
+    year: int | None
+    latest_year: int | None
+    website_url: str | None
+    conference_dates: str | None
+    place: str | None
+    timezone: str | None
+    deadline_status: Literal["upcoming", "tbd", "passed"]
+    next_deadline: datetime | None
+    next_abstract_deadline: datetime | None
+    next_deadline_comment: str | None
+    timeline: list[CatalogTimelineItem]
+    wikicfp_url: str
+    dblp_url: str | None
+    topics: list[str] = []
+    in_my_list: bool = False
+    my_conference_id: UUID | None = None
+
+
+class CatalogSource(BaseModel):
+    name: str
+    url: str
+    license: str
+    data_url: str
+
+
+class CatalogCategory(BaseModel):
+    code: str
+    label: str
+
+
+class CatalogTopic(BaseModel):
+    id: str
+    label: str
+    in_prism_focus: bool
+
+
+class CatalogResponse(BaseModel):
+    items: list[CatalogItem]
+    total: int
+    limit: int
+    offset: int
+    source: CatalogSource
+    fetched_at: datetime
+    stale: bool
+    categories: list[CatalogCategory]
+    topics: list[CatalogTopic]
+
+
+class CatalogRefreshResponse(BaseModel):
+    total: int
+    fetched_at: datetime
+    stale: bool
+
+
+class CatalogAddRequest(BaseModel):
+    project_id: UUID | None = None

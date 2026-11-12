@@ -4,3 +4,4 @@ export * from "./DataTable";
 export * from "./Toast";
 export * from "./Tabs";
 export * from "./UserPicker";
+export * from "./ThemeToggle";

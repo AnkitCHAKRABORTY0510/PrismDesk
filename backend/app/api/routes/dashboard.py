@@ -20,8 +20,8 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboards"])
 
 
 @router.get("/admin", response_model=AdminDashboard)
-def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(require_capability("dashboard.admin"))):
-    return dashboard_service.admin_dashboard(db)
+def admin_dashboard(db: Session = Depends(get_db), user: User = Depends(require_capability("dashboard.admin"))):
+    return dashboard_service.admin_dashboard(db, user)
 
 
 @router.get("/professor", response_model=ProfessorDashboard)

@@ -6,13 +6,16 @@ import "./index.css";
 import App from "./App";
 import { ToastProvider } from "./components/ui";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AuthProvider>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>
 );

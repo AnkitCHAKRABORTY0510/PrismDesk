@@ -23,3 +23,6 @@ dist/
 
 # Database backups
 backups/
+
+# Cached external data (conference catalog)
+backend/data/

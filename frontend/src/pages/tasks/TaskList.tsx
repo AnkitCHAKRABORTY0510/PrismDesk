@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BellRing } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -21,9 +22,10 @@ import { useAsync, useDebounced } from "../../hooks/useAsync";
 import { formatDateTime, humanize } from "../../lib/format";
 import { can } from "../../lib/permissions";
 import { listTasks, pendingReviews } from "../../services/taskService";
+import ReminderFormModal from "./ReminderFormModal";
 import TaskFormModal from "./TaskFormModal";
 
-type View = "mine" | "personal" | "managed" | "reviews";
+type View = "mine" | "personal" | "managed" | "reviews" | "reminders";
 
 const STATUSES = ["todo", "in_progress", "under_review", "revision_required", "completed"];
 
@@ -33,17 +35,23 @@ export default function TaskList() {
   const [params, setParams] = useSearchParams();
   const canReview = can(user, "tasks.review");
   const view = (params.get("view") as View) || (canReview && !can(user, "tasks.personal") ? "managed" : "mine");
-  const [status, setStatus] = useState("");
+  // The dashboard pipeline links here with ?status=… or ?overdue=1.
+  const [status, setStatus] = useState(() => {
+    const initial = params.get("status") ?? "";
+    return STATUSES.includes(initial) ? initial : "";
+  });
   const [priority, setPriority] = useState("");
-  const [overdue, setOverdue] = useState(false);
+  const [overdue, setOverdue] = useState(() => params.get("overdue") === "1");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [reminding, setReminding] = useState(false);
   const q = useDebounced(search);
 
   const tabs: { id: View; label: string }[] = [
     ...(can(user, "tasks.personal") ? [{ id: "mine" as View, label: "My tasks" }, { id: "personal" as View, label: "Personal" }] : []),
     ...(canReview ? [{ id: "managed" as View, label: "Project tasks" }, { id: "reviews" as View, label: "Review queue" }] : []),
+    { id: "reminders" as View, label: "Reminders" },
   ];
 
   const tasks = useAsync(
@@ -65,7 +73,16 @@ export default function TaskList() {
       <PageHeader
         title="Tasks"
         description="Official project tasks follow To Do → In Progress → Under Review → Revision Required/Completed."
-        actions={can(user, "tasks.personal") && <Button onClick={() => setCreating(true)}>New personal task</Button>}
+        actions={
+          <>
+            {(canReview || can(user, "tasks.personal")) && (
+              <Button variant="secondary" onClick={() => setReminding(true)}>
+                <BellRing className="h-4 w-4" aria-hidden="true" /> {canReview ? "Send reminder" : "Remind professor"}
+              </Button>
+            )}
+            {can(user, "tasks.personal") && <Button onClick={() => setCreating(true)}>New personal task</Button>}
+          </>
+        }
       />
       {tabs.length > 1 && <Tabs tabs={tabs} active={view} onChange={switchView} />}
 
@@ -82,7 +99,7 @@ export default function TaskList() {
                   rowKey={(row) => row.assignment.id}
                   empty="Nothing waiting for review."
                   columns={[
-                    { header: "Task", cell: (row) => <Link className="font-medium hover:text-brand" to={`/tasks/${row.task_id}?assignment=${row.assignment.id}`}>{row.task_title}</Link> },
+                    { header: "Task", cell: (row) => <Link className="font-medium hover:text-link" to={`/tasks/${row.task_id}?assignment=${row.assignment.id}`}>{row.task_title}</Link> },
                     { header: "Student", cell: (row) => row.assignment.assignee.full_name },
                     { header: "Project", cell: (row) => row.project_title },
                     { header: "Version", cell: (row) => `v${row.latest_version ?? "?"}` },
@@ -100,7 +117,7 @@ export default function TaskList() {
             <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search task titles…" />
             <FilterSelect label="Status" value={status} allLabel="All statuses" onChange={(v) => { setStatus(v); setPage(1); }} options={STATUSES.map((s) => ({ value: s, label: humanize(s) }))} />
             <FilterSelect label="Priority" value={priority} allLabel="All priorities" onChange={(v) => { setPriority(v); setPage(1); }} options={["low", "medium", "high", "urgent"].map((p) => ({ value: p, label: humanize(p) }))} />
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-fg-soft">
               <input type="checkbox" checked={overdue} onChange={(e) => { setOverdue(e.target.checked); setPage(1); }} /> Overdue only
             </label>
           </div>
@@ -119,8 +136,16 @@ export default function TaskList() {
                       header: "Task",
                       cell: (row) => (
                         <div>
-                          <Link to={`/tasks/${row.id}`} className="font-medium text-slate-800 hover:text-brand">{row.title}</Link>
-                          <div className="text-xs text-slate-500">{row.task_type === "personal" ? "Personal" : row.project_title}</div>
+                          <Link to={`/tasks/${row.id}`} className="font-medium text-fg hover:text-link">{row.title}</Link>
+                          <div className="text-xs text-fg-muted">
+                            {row.task_type === "personal"
+                              ? "Personal"
+                              : row.task_type === "reminder"
+                                ? row.my_assignment
+                                  ? `From ${row.created_by_user?.full_name ?? "a lab member"}${row.related_task_title ? ` · about ${row.related_task_title}` : ""}`
+                                  : `Sent to ${row.assignments.map((a) => a.assignee.full_name).join(", ")}`
+                                : row.project_title}
+                          </div>
                         </div>
                       ),
                     },
@@ -137,10 +162,14 @@ export default function TaskList() {
                     {
                       header: "Status",
                       cell: (row) =>
-                        row.my_assignment ? (
+                        row.task_type === "reminder" && row.my_assignment ? (
+                          <Badge tone={row.my_assignment.status === "completed" ? "green" : "amber"}>
+                            {row.my_assignment.status === "completed" ? "Done" : "Open"}
+                          </Badge>
+                        ) : row.my_assignment ? (
                           <StatusBadge status={row.my_assignment.status} />
                         ) : (
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-fg-muted">
                             {row.assignments.filter((a) => a.status === "completed").length}/{row.assignments.length} completed
                           </span>
                         ),
@@ -154,6 +183,18 @@ export default function TaskList() {
         </Card>
       )}
 
+      {reminding && (
+        <ReminderFormModal
+          open
+          onClose={() => setReminding(false)}
+          onSent={() => {
+            setReminding(false);
+            notify("Reminder sent. Recipients get a private Discord message.");
+            if (view === "reminders") void tasks.reload();
+            else switchView("reminders");
+          }}
+        />
+      )}
       {creating && (
         <TaskFormModal
           open

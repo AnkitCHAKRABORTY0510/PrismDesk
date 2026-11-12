@@ -56,7 +56,7 @@ export default function ProjectList() {
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search projects…" />
           <FilterSelect label="Project status" value={status} allLabel="Active and archived" onChange={(v) => { setStatus(v); setPage(1); }} options={statusOptions} />
           {isAdmin && (
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-fg-soft">
               <input type="checkbox" checked={mine} onChange={(e) => { setMine(e.target.checked); setPage(1); }} /> Only my projects
             </label>
           )}
@@ -77,10 +77,10 @@ export default function ProjectList() {
                     header: "Project",
                     cell: (row) => (
                       <div>
-                        <Link to={`/projects/${row.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-slate-800 hover:text-brand">
+                        <Link to={`/projects/${row.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-fg hover:text-link">
                           {row.title}
                         </Link>
-                        <div className="line-clamp-1 text-xs text-slate-500">{row.description}</div>
+                        <div className="line-clamp-1 text-xs text-fg-muted">{row.description}</div>
                       </div>
                     ),
                   },

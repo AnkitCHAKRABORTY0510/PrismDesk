@@ -1,12 +1,14 @@
+from urllib.parse import urlparse
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.permissions import ADMINISTRATOR, PROFESSOR, has_capability
+from app.models.notification import DiscordAccount, Notification
 from app.models.project import Project, ProjectMember
 from app.models.research import (
     PaperReadingProgress,
@@ -24,6 +26,7 @@ from app.schemas.research import (
 )
 from app.core.config import settings
 from app.services.audit_service import record_audit
+from app.services import discord_project_channels
 from app.services.notification_service import enqueue_notification
 from app.services.project_access import get_project_access, require, visible_project_ids
 
@@ -246,9 +249,30 @@ def _paper_summary(paper: ResearchPaper) -> str:
 
 
 def _notify_project_members(db: Session, user: User, paper_id: UUID, project: Project) -> None:
-    """DM project members (research category) that a paper joined their project."""
+    """Tell the project team a paper joined their project.
+
+    Posted in the project's private Discord channel if it has one; otherwise
+    each other active member gets a DM (research category).
+    """
 
     paper = db.get(ResearchPaper, paper_id)
+
+    # The project's private Discord channel, when it has one, replaces the DMs.
+    channel = discord_project_channels.channel_for_project(db, project.id)
+    if channel is not None and project.status == "active":
+        enqueue_notification(
+            db,
+            channel_id=channel.channel_id,
+            category="research",
+            event_type="paper.project_post",
+            title=f"{'🎬' if _item_kind(paper) == 'video' else '📄'} New {_item_kind(paper)}: {paper.title}",
+            body=f"Added to {project.title} by {user.full_name}.\n{_paper_summary(paper)}\nDiscuss it in the thread below.",
+            entity_type="research_paper",
+            entity_id=paper_id,
+            dedupe_key=f"paper.project_post:{project.id}:{paper_id}",
+        )
+        return
+
     member_ids = db.scalars(
         select(ProjectMember.user_id).where(
             ProjectMember.project_id == project.id,
@@ -270,22 +294,63 @@ def _notify_project_members(db: Session, user: User, paper_id: UUID, project: Pr
         )
 
 
-def _announce_new_paper(db: Session, user: User, paper: ResearchPaper) -> None:
-    """Post a new paper to the lab research channel; the worker opens a thread for discussion."""
+VIDEO_HOSTS = ("youtube.com", "youtu.be", "vimeo.com")
 
-    if not settings.DISCORD_RESEARCH_CHANNEL_ID:
-        return
-    enqueue_notification(
-        db,
-        channel_id=settings.DISCORD_RESEARCH_CHANNEL_ID,
-        category="research",
-        event_type="paper.added",
-        title=f"📄 New paper: {paper.title}",
-        body=f"Added by {user.full_name}.\n{_paper_summary(paper)}\nDiscuss it in the thread below.",
-        entity_type="research_paper",
-        entity_id=paper.id,
-        dedupe_key=f"paper.added:{paper.id}",
-    )
+
+def _item_kind(paper: ResearchPaper) -> str:
+    """'video' for YouTube/Vimeo links, otherwise 'paper' (wording only)."""
+
+    host = urlparse(paper.url or "").hostname or ""
+    return "video" if any(host == h or host.endswith(f".{h}") for h in VIDEO_HOSTS) else "paper"
+
+
+def _lab_recipients(db: Session, exclude_user_id: UUID) -> list[UUID]:
+    """Approved users with a linked Discord account who can see the whole library."""
+
+    users = db.scalars(
+        select(User)
+        .join(DiscordAccount, and_(DiscordAccount.user_id == User.id, DiscordAccount.status == "linked"))
+        .where(User.account_status == "approved", User.id != exclude_user_id)
+    ).all()
+    # Guests only see their projects' papers, so they are not told about lab-wide ones.
+    return [u.id for u in users if _can_view_library(u)]
+
+
+def _announce_new_paper(db: Session, user: User, paper: ResearchPaper) -> None:
+    """Tell the whole lab about a general (not project) paper or video link.
+
+    Posts to the research channel (the worker opens a discussion thread on
+    the post) and DMs every lab member who has the research category on.
+    Papers added to a project are only announced to that project's team
+    (see ``_notify_project_members``).
+    """
+
+    kind = _item_kind(paper)
+    summary = _paper_summary(paper)
+    if settings.DISCORD_RESEARCH_CHANNEL_ID:
+        enqueue_notification(
+            db,
+            channel_id=settings.DISCORD_RESEARCH_CHANNEL_ID,
+            category="research",
+            event_type="paper.added",
+            title=f"{'🎬' if kind == 'video' else '📄'} New {kind}: {paper.title}",
+            body=f"Added by {user.full_name}.\n{summary}\nDiscuss it in the thread below.",
+            entity_type="research_paper",
+            entity_id=paper.id,
+            dedupe_key=f"paper.added:{paper.id}",
+        )
+    for recipient_id in _lab_recipients(db, user.id):
+        enqueue_notification(
+            db,
+            recipient_id=recipient_id,
+            category="research",
+            event_type="paper.shared",
+            title=f"New {kind} for the lab: {paper.title}",
+            body=f"{user.full_name} added it to the research library.\n{summary}",
+            entity_type="research_paper",
+            entity_id=paper.id,
+            dedupe_key=f"paper.shared:{paper.id}:{recipient_id}",
+        )
 
 
 def create_paper(db: Session, user: User, data: PaperCreate) -> tuple[ResearchPaper, bool]:
@@ -330,10 +395,11 @@ def create_paper(db: Session, user: User, data: PaperCreate) -> tuple[ResearchPa
         raise ConflictError("A paper with this DOI already exists.")
 
     record_audit(db, user.id, "paper.created", "research_paper", paper.id, {"title": paper.title})
-    _announce_new_paper(db, user, paper)
-
     if data.project_id:
+        # Project papers are announced to that project's team only.
         _link(db, user, paper.id, data.project_id)
+    else:
+        _announce_new_paper(db, user, paper)
 
     _commit(db)
     db.refresh(paper)
@@ -370,6 +436,45 @@ def update_paper(db: Session, user: User, paper_id: UUID, data: PaperUpdate) -> 
     return paper
 
 
+def delete_paper(db: Session, user: User, paper_id: UUID) -> None:
+    """Hard-delete a paper with its project links, reading progress and notes.
+
+    Administrators may delete any paper. The person who added it, and
+    professors, may delete it only while no project uses it and nobody
+    else has private notes on it, so other people's work is never lost.
+    """
+
+    paper = get_paper(db, user, paper_id)
+    require(can_edit_paper(user, paper), "You cannot delete this paper.")
+
+    if ADMINISTRATOR not in user.role_names:
+        linked = db.scalar(select(func.count()).select_from(ProjectPaper).where(ProjectPaper.paper_id == paper_id))
+        require(not linked, "This paper is used by a project. Remove it from its projects first, or ask an administrator.")
+        others_notes = db.scalar(
+            select(func.count()).select_from(ResearchNote).where(
+                ResearchNote.paper_id == paper_id, ResearchNote.user_id != user.id
+            )
+        )
+        require(not others_notes, "Other lab members have notes on this paper. Ask an administrator to delete it.")
+
+    # Do not announce a paper that no longer exists.
+    db.execute(
+        update(Notification)
+        .where(
+            Notification.entity_type == "research_paper",
+            Notification.entity_id == str(paper_id),
+            Notification.status.in_(("pending", "retry_scheduled")),
+        )
+        .values(status="failed", last_error="Paper was deleted before delivery.")
+    )
+    record_audit(
+        db, user.id, "paper.deleted", "research_paper", paper_id, {"title": paper.title, "doi": paper.doi}
+    )
+    # Links, reading progress and notes are removed by ON DELETE CASCADE.
+    db.delete(paper)
+    _commit(db)
+
+
 def link_paper(db: Session, user: User, paper_id: UUID, project_id: UUID) -> ResearchPaper:
     paper = get_paper(db, user, paper_id)
     if not _link(db, user, paper.id, project_id):
@@ -401,7 +506,7 @@ def set_reading_status(
     db: Session, user: User, paper_id: UUID, status: str, project_id: UUID | None
 ) -> PaperReadingProgress:
     if not has_capability(user.role_names, "research.track_progress"):
-        raise ForbiddenError("Only students track reading progress.")
+        raise ForbiddenError("Your role cannot track reading progress.")
 
     get_paper(db, user, paper_id)
 

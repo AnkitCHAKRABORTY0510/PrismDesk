@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BellRing } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -32,14 +33,17 @@ import {
   type Assignment,
   type AssignmentStatus,
   type Task,
+  type TaskType,
 } from "../../services/taskService";
+import ReminderFormModal from "./ReminderFormModal";
 import TaskFormModal from "./TaskFormModal";
 
 // Status moves an assignee can make directly (others happen through
 // submission and review). Mirrors the backend rules for convenience.
-const NEXT: Record<"official" | "personal", Partial<Record<AssignmentStatus, AssignmentStatus[]>>> = {
+const NEXT: Record<TaskType, Partial<Record<AssignmentStatus, AssignmentStatus[]>>> = {
   official: { todo: ["in_progress"], in_progress: ["todo"], revision_required: ["in_progress"] },
   personal: { todo: ["in_progress", "completed"], in_progress: ["todo", "completed"], completed: ["in_progress"] },
+  reminder: { todo: ["completed"], in_progress: ["completed"], completed: ["todo"] },
 };
 
 export default function TaskDetail() {
@@ -51,6 +55,7 @@ export default function TaskDetail() {
   const [selected, setSelected] = useState<string | null>(search.get("assignment"));
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [reminding, setReminding] = useState(false);
 
   if (task.loading && !task.data) return <Loading />;
   if (task.error) return <ErrorMessage message={task.error} onRetry={task.reload} />;
@@ -64,23 +69,46 @@ export default function TaskDetail() {
         title={t.title}
         description={
           <span>
-            {t.task_type === "personal" ? "Personal task" : <>Official task · <Link className="text-brand" to={`/projects/${t.project_id}`}>{t.project_title}</Link></>}
-            {" · "}Due {formatDateTime(t.due_at)} · Priority {humanize(t.priority)}
+            {t.task_type === "personal" ? (
+              "Personal task"
+            ) : t.task_type === "reminder" ? (
+              <>
+                Reminder from {t.created_by_user?.full_name ?? "a lab member"}
+                {t.related_task_id && (
+                  <>
+                    {" "}about <Link className="text-link" to={`/tasks/${t.related_task_id}`}>{t.related_task_title}</Link>
+                  </>
+                )}
+                {" · "}
+                <Link className="text-link" to={`/projects/${t.project_id}`}>{t.project_title}</Link>
+              </>
+            ) : (
+              <>Official task · <Link className="text-link" to={`/projects/${t.project_id}`}>{t.project_title}</Link></>
+            )}
+            {" · "}
+            {t.task_type === "reminder" ? (t.due_at ? `When ${formatDateTime(t.due_at)}` : "No date") : `Due ${formatDateTime(t.due_at)} · Priority ${humanize(t.priority)}`}
           </span>
         }
         actions={
-          t.can_manage && (
-            <>
-              <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>Delete</Button>
-            </>
-          )
+          <>
+            {t.task_type === "official" && (t.can_manage || t.my_assignment) && (
+              <Button variant="secondary" onClick={() => setReminding(true)}>
+                <BellRing className="h-4 w-4" aria-hidden="true" /> {t.can_manage ? "Send reminder" : "Remind professor"}
+              </Button>
+            )}
+            {t.can_manage && (
+              <>
+                <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>
+                <Button variant="danger" onClick={() => setConfirmDelete(true)}>Delete</Button>
+              </>
+            )}
+          </>
         }
       />
       {t.is_overdue && <Alert>This task is past its due date.</Alert>}
       {t.description && (
         <Card title="Description">
-          <p className="whitespace-pre-line text-sm text-slate-700">{t.description}</p>
+          <p className="whitespace-pre-line text-sm text-fg-soft">{t.description}</p>
         </Card>
       )}
 
@@ -88,7 +116,23 @@ export default function TaskDetail() {
         <AssigneesCard task={t} selected={assignment?.id ?? null} onSelect={setSelected} onChanged={task.reload} />
       )}
 
-      {assignment && (
+      {t.task_type === "reminder" && t.can_manage && (
+        <Card title="Recipients">
+          <ul className="divide-y divide-line text-sm">
+            {t.assignments.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 py-2">
+                <span>
+                  {a.assignee.full_name} <span className="text-xs text-fg-muted">@{a.assignee.username}</span>
+                </span>
+                <StatusBadge status={a.status === "completed" ? "completed" : "pending"} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-fg-muted">Each recipient was sent a private Discord message.</p>
+        </Card>
+      )}
+
+      {assignment && (t.task_type !== "reminder" || assignment.id === t.my_assignment?.id) && (
         <AssignmentPanel
           key={assignment.id}
           task={t}
@@ -98,6 +142,18 @@ export default function TaskDetail() {
         />
       )}
 
+      {reminding && (
+        <ReminderFormModal
+          open
+          relatedTask={t}
+          defaultRecipientIds={t.can_manage ? t.assignments.map((a) => a.assignee.id) : []}
+          onClose={() => setReminding(false)}
+          onSent={() => {
+            setReminding(false);
+            notify("Reminder sent. Recipients get a private Discord message.");
+          }}
+        />
+      )}
       {editing && (
         <TaskFormModal
           open
@@ -188,7 +244,7 @@ function AssigneesCard({
         empty="No students assigned yet."
         onRowClick={(row) => onSelect(row.id)}
         columns={[
-          { header: "Student", cell: (row) => <span className={row.id === selected ? "font-semibold text-brand" : ""}>{row.assignee.full_name}</span> },
+          { header: "Student", cell: (row) => <span className={row.id === selected ? "font-semibold text-link" : ""}>{row.assignee.full_name}</span> },
           { header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
           { header: "Submissions", cell: (row) => row.submission_count },
           { header: "Updated", cell: (row) => formatDateTime(row.updated_at) },
@@ -250,7 +306,7 @@ function AssignmentPanel({
           <div className="mt-4 flex flex-wrap gap-2">
             {nextStatuses.map((status) => (
               <Button key={status} size="sm" variant="secondary" disabled={busy} onClick={() => void run(() => changeStatus(assignment.id, status), `Moved to ${humanize(status)}.`)}>
-                Move to {humanize(status)}
+                {task.task_type === "reminder" ? (status === "completed" ? "Mark done" : "Reopen") : `Move to ${humanize(status)}`}
               </Button>
             ))}
           </div>
@@ -305,13 +361,13 @@ function AssignmentPanel({
           {submissions.loading && !submissions.data ? (
             <Loading />
           ) : (submissions.data ?? []).length === 0 ? (
-            <p className="text-sm text-slate-500">No submissions yet.</p>
+            <p className="text-sm text-fg-muted">No submissions yet.</p>
           ) : (
             <ol className="space-y-4">
               {(submissions.data ?? []).map((s) => (
-                <li key={s.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <div className="flex justify-between text-xs text-slate-500">
-                    <strong className="text-slate-700">Version {s.version}</strong>
+                <li key={s.id} className="rounded-lg border border-line p-3 text-sm">
+                  <div className="flex justify-between text-xs text-fg-muted">
+                    <strong className="text-fg-soft">Version {s.version}</strong>
                     <span>{formatDateTime(s.submitted_at)}</span>
                   </div>
                   {s.response_text && <p className="mt-2 whitespace-pre-line">{s.response_text}</p>}
@@ -321,10 +377,10 @@ function AssignmentPanel({
                     </ul>
                   )}
                   {s.reviews.map((r) => (
-                    <div key={r.id} className="mt-3 rounded-md bg-slate-50 p-2">
+                    <div key={r.id} className="mt-3 rounded-md bg-surface-muted p-2">
                       <div className="flex items-center gap-2 text-xs">
                         <StatusBadge status={r.decision === "approved" ? "completed" : "revision_required"} />
-                        <span className="text-slate-500">{r.reviewer?.full_name} · {formatDateTime(r.created_at)}</span>
+                        <span className="text-fg-muted">{r.reviewer?.full_name} · {formatDateTime(r.created_at)}</span>
                       </div>
                       {r.feedback && <p className="mt-1 whitespace-pre-line">{r.feedback}</p>}
                     </div>

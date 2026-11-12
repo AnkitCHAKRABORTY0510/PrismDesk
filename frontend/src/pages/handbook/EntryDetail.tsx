@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Button, Card, ErrorMessage, ExternalLink, Loading, Modal, Textarea, useToast } from "../../components/ui";
+import { Button, Card, ErrorMessage, ExternalLink, Loading, Textarea, useToast } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
-import { formatDate, formatDateTime, humanize } from "../../lib/format";
+import { addDays } from "../../lib/calendar";
+import { formatDate, formatDateTime } from "../../lib/format";
 import { getErrorMessage } from "../../services/api";
-import { addComment, entryVersions, getEntry, type HandbookComment } from "../../services/handbookService";
+import { addComment, entryVersions, getEntry, listEntries, type HandbookComment, type HandbookEntry } from "../../services/handbookService";
 import EntryFormModal from "./EntryFormModal";
+import { ENTRY_FIELDS } from "./plannerMeta";
+import { VersionHistory } from "./VersionHistory";
 
 const SECTIONS = [
   ["work_completed", "Work completed"],
@@ -23,6 +27,7 @@ export default function EntryDetail() {
   const [editing, setEditing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [comment, setComment] = useState("");
+  const neighbours = useAsync(async () => (entry.data ? findNeighbours(entry.data) : null), [entry.data?.id]);
 
   if (entry.loading && !entry.data) return <Loading />;
   if (entry.error) return <ErrorMessage message={entry.error} onRetry={entry.reload} />;
@@ -46,26 +51,55 @@ export default function EntryDetail() {
     <div className="space-y-6">
       <PageHeader
         title={`${formatDate(e.entry_date)} · ${e.project_title ?? "Project"}`}
-        description={<>By {e.student.full_name} · version {e.version} · <Link className="text-brand" to={`/projects/${e.project_id}`}>Open project</Link></>}
+        description={<>By {e.student.full_name} · version {e.version} · <Link className="text-link" to={`/projects/${e.project_id}`}>Open project</Link></>}
         actions={
           <>
-            <Button variant="secondary" onClick={() => setShowHistory(true)}>Edit history</Button>
+            <Link
+              to={`/handbook?open=${e.entry_date}`}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium text-fg-soft shadow-sm hover:bg-surface-muted hover:text-fg"
+            >
+              <CalendarDays className="h-4 w-4" aria-hidden="true" />
+              Day page
+            </Link>
+            <Button variant="secondary" onClick={() => setShowHistory(true)}>Edit history{e.version > 1 ? ` (${e.version})` : ""}</Button>
             {e.can_edit && <Button onClick={() => setEditing(true)}>Edit entry</Button>}
           </>
         }
       />
+      <nav aria-label="Other days of this project" className="flex items-center justify-between gap-2 text-sm">
+        {neighbours.data?.prev ? (
+          <Link to={`/handbook/entries/${neighbours.data.prev.id}`} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-link hover:bg-surface-muted">
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            {formatDate(neighbours.data.prev.entry_date)}
+          </Link>
+        ) : (
+          <span className="px-2 py-1 text-fg-subtle">No earlier entry</span>
+        )}
+        {neighbours.data?.next ? (
+          <Link to={`/handbook/entries/${neighbours.data.next.id}`} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-link hover:bg-surface-muted">
+            {formatDate(neighbours.data.next.entry_date)}
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className="px-2 py-1 text-fg-subtle">No later entry</span>
+        )}
+      </nav>
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2" title="Entry">
           <div className="space-y-4 text-sm">
             {SECTIONS.map(([key, label]) => (
               <div key={key}>
-                <h3 className="font-medium text-slate-700">{label}</h3>
-                <p className="mt-1 whitespace-pre-line text-slate-600">{e[key] || "—"}</p>
+                <h3 className="font-medium text-fg-soft">{label}</h3>
+                {e[key] ? (
+                  <p className="mt-1 whitespace-pre-line text-fg-soft">{e[key]}</p>
+                ) : (
+                  <p className="mt-1 text-sm italic text-fg-subtle">Nothing noted.</p>
+                )}
               </div>
             ))}
             {e.references.length > 0 && (
               <div>
-                <h3 className="font-medium text-slate-700">References</h3>
+                <h3 className="font-medium text-fg-soft">References</h3>
                 <ul className="mt-1 list-disc pl-5">{e.references.map((r) => <li key={r}><ExternalLink href={r} /></li>)}</ul>
               </div>
             )}
@@ -73,7 +107,7 @@ export default function EntryDetail() {
         </Card>
 
         <Card title="Supervisor comments">
-          {e.comments.length === 0 && <p className="text-sm text-slate-500">No comments yet.</p>}
+          {e.comments.length === 0 && <p className="text-sm text-fg-muted">No comments yet.</p>}
           <ul className="space-y-4">
             {e.comments.map((c) => (
               <CommentThread key={c.id} comment={c} canReply={e.can_comment} onReply={(body) => post(body, c.id)} />
@@ -102,7 +136,7 @@ export default function EntryDetail() {
           }}
         />
       )}
-      {showHistory && <HistoryModal entryId={e.id} onClose={() => setShowHistory(false)} />}
+      {showHistory && <VersionHistory load={() => entryVersions(e.id)} fields={ENTRY_FIELDS} onClose={() => setShowHistory(false)} />}
     </div>
   );
 }
@@ -119,14 +153,14 @@ function CommentThread({
   const [reply, setReply] = useState("");
   const [open, setOpen] = useState(false);
   return (
-    <li className="rounded-lg bg-slate-50 p-3 text-sm">
-      <div className="text-xs text-slate-500">{comment.author?.full_name ?? "Former user"} · {formatDateTime(comment.created_at)}</div>
+    <li className="rounded-lg bg-surface-muted p-3 text-sm">
+      <div className="text-xs text-fg-muted">{comment.author?.full_name ?? "Former user"} · {formatDateTime(comment.created_at)}</div>
       <p className="mt-1 whitespace-pre-line">{comment.body}</p>
       {comment.replies.length > 0 && (
-        <ul className="mt-2 space-y-2 border-l-2 border-slate-200 pl-3">
+        <ul className="mt-2 space-y-2 border-l-2 border-line pl-3">
           {comment.replies.map((r) => (
             <li key={r.id}>
-              <div className="text-xs text-slate-500">{r.author?.full_name ?? "Former user"} · {formatDateTime(r.created_at)}</div>
+              <div className="text-xs text-fg-muted">{r.author?.full_name ?? "Former user"} · {formatDateTime(r.created_at)}</div>
               <p className="whitespace-pre-line">{r.body}</p>
             </li>
           ))}
@@ -141,34 +175,20 @@ function CommentThread({
             </Button>
           </div>
         ) : (
-          <button type="button" className="mt-2 text-xs text-brand" onClick={() => setOpen(true)}>Reply</button>
+          <button type="button" className="mt-2 text-xs text-link" onClick={() => setOpen(true)}>Reply</button>
         ))}
     </li>
   );
 }
 
-function HistoryModal({ entryId, onClose }: { entryId: string; onClose: () => void }) {
-  const versions = useAsync(() => entryVersions(entryId), [entryId]);
-  return (
-    <Modal open wide title="Edit history" onClose={onClose}>
-      <ErrorMessage message={versions.error} />
-      {versions.loading && !versions.data ? (
-        <Loading />
-      ) : (
-        <ol className="space-y-4">
-          {(versions.data ?? []).map((v) => (
-            <li key={v.version} className="rounded-lg border border-slate-200 p-3 text-sm">
-              <div className="mb-2 text-xs text-slate-500">Version {v.version} · {formatDateTime(v.edited_at)}</div>
-              {Object.entries(v.snapshot).map(([key, value]) => (
-                <div key={key} className="mb-1">
-                  <span className="font-medium text-slate-600">{humanize(key)}: </span>
-                  <span className="whitespace-pre-line text-slate-700">{Array.isArray(value) ? value.join(", ") : String(value || "—")}</span>
-                </div>
-              ))}
-            </li>
-          ))}
-        </ol>
-      )}
-    </Modal>
-  );
+// The same student's previous and next entry on this project.
+async function findNeighbours(entry: HandbookEntry) {
+  const scope = { project_id: entry.project_id, student_id: entry.student.id };
+  const [before, after] = await Promise.all([
+    listEntries({ ...scope, date_to: addDays(entry.entry_date, -1), page_size: 1 }),
+    listEntries({ ...scope, date_from: addDays(entry.entry_date, 1), page_size: 1 }),
+  ]);
+  // Entries come newest first, so the nearest later entry is the last one.
+  const next = after.total > 1 ? (await listEntries({ ...scope, date_from: addDays(entry.entry_date, 1), page_size: 1, page: after.total })).items[0] : after.items[0];
+  return { prev: before.items[0] ?? null, next: next ?? null };
 }
